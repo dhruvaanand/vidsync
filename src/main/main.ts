@@ -1,0 +1,300 @@
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  session,
+} from 'electron';
+import { mpvWorker } from './mpvWorker';
+import {
+  attachVideoHost,
+  bindVideoWindowSync,
+  destroyVideoWindow,
+  updateVideoBounds,
+  type VideoBounds,
+} from './videoWindow';
+
+if (require('electron-squirrel-startup')) {
+  app.quit();
+}
+
+let mainWindow: BrowserWindow | null = null;
+let isShuttingDown = false;
+let mpvWid = 0;
+
+const emptyTick = {
+  needsRedraw: false,
+  frame: null,
+  width: 0,
+  height: 0,
+  timePos: 0,
+  duration: 0,
+  paused: true,
+};
+
+function mpvUnavailable() {
+  return isShuttingDown || !mpvWorker.isAvailable();
+}
+
+const DEV_CSP =
+  "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; " +
+  "connect-src 'self' http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:* https: wss:; " +
+  "img-src 'self' data: blob:; " +
+  "media-src 'self' blob:;";
+
+function configureContentSecurityPolicy() {
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const headers = { ...details.responseHeaders };
+    headers['Content-Security-Policy'] = [DEV_CSP];
+    callback({ responseHeaders: headers });
+  });
+}
+
+async function ensureMpvForBounds(bounds: VideoBounds): Promise<boolean> {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+
+  mpvWid = await attachVideoHost(mainWindow, bounds);
+
+  if (mpvWorker.isAvailable()) {
+    return true;
+  }
+
+  return mpvWorker.start(mpvWid);
+}
+
+const createWindow = () => {
+  mainWindow = new BrowserWindow({
+    width: 1400,
+    height: 900,
+    minWidth: 960,
+    minHeight: 600,
+    backgroundColor: '#0f0f12',
+    webPreferences: {
+      preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
+      contextIsolation: true,
+      sandbox: false,
+      nodeIntegration: false,
+    },
+  });
+
+  bindVideoWindowSync(mainWindow);
+
+  mainWindow.webContents.on('did-fail-load', (_event, code, description, url) => {
+    console.error('Renderer failed to load:', code, description, url);
+  });
+
+  mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY).catch((err) => {
+    console.error('loadURL failed:', err);
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    if (process.env.NODE_ENV === 'development') {
+      mainWindow?.webContents.openDevTools({ mode: 'detach' });
+    }
+  });
+
+  mainWindow.on('close', () => {
+    isShuttingDown = true;
+    mpvWorker.stop();
+    destroyVideoWindow();
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+};
+
+ipcMain.handle('dialog:openVideo', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Select MKV / video file',
+    properties: ['openFile'],
+    filters: [
+      {
+        name: 'Video',
+        extensions: ['mkv', 'mp4', 'avi', 'webm', 'mov', 'm4v'],
+      },
+    ],
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+
+  return result.filePaths[0];
+});
+
+ipcMain.handle('dialog:openSubtitle', async () => {
+  const result = await dialog.showOpenDialog({
+    title: 'Select subtitle file',
+    properties: ['openFile'],
+    filters: [
+      {
+        name: 'Subtitles',
+        extensions: ['srt', 'ass', 'ssa', 'vtt', 'sub'],
+      },
+    ],
+  });
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+
+  return result.filePaths[0];
+});
+
+ipcMain.handle(
+  'mpv:available',
+  async (_event, bounds?: VideoBounds, updateBoundsOnly = false) => {
+    if (isShuttingDown) return false;
+
+    if (updateBoundsOnly) {
+      if (!mainWindow || !bounds) return false;
+      updateVideoBounds(bounds);
+      return mpvWorker.isAvailable();
+    }
+
+    if (bounds) {
+      return ensureMpvForBounds(bounds);
+    }
+
+    if (mpvWorker.isAvailable()) return true;
+    if (mpvWid > 0) {
+      return mpvWorker.start(mpvWid);
+    }
+    return false;
+  },
+);
+
+ipcMain.handle('mpv:loadError', () => mpvWorker.getLoadError());
+
+ipcMain.handle('mpv:load', async (_event, filePath: string) => {
+  if (mpvUnavailable()) return false;
+  return mpvWorker.request('load', filePath);
+});
+
+ipcMain.handle('mpv:play', async () => {
+  if (mpvUnavailable()) return;
+  await mpvWorker.request('play');
+});
+
+ipcMain.handle('mpv:pause', async () => {
+  if (mpvUnavailable()) return;
+  await mpvWorker.request('pause');
+});
+
+ipcMain.handle('mpv:togglePause', async () => {
+  if (mpvUnavailable()) return;
+  await mpvWorker.request('togglePause');
+});
+
+ipcMain.handle('mpv:seek', async (_event, seconds: number) => {
+  if (mpvUnavailable()) return;
+  await mpvWorker.request('seek', seconds);
+});
+
+ipcMain.handle('mpv:getTimePos', async () => {
+  if (mpvUnavailable()) return 0;
+  return mpvWorker.request('getTimePos');
+});
+
+ipcMain.handle('mpv:getDuration', async () => {
+  if (mpvUnavailable()) return 0;
+  return mpvWorker.request('getDuration');
+});
+
+ipcMain.handle('mpv:getPaused', async () => {
+  if (mpvUnavailable()) return true;
+  return mpvWorker.request('getPaused');
+});
+
+ipcMain.handle('mpv:tick', async (event) => {
+  if (mpvUnavailable() || event.sender.isDestroyed()) {
+    return emptyTick;
+  }
+
+  try {
+    const tick = (await mpvWorker.request('tick', 0, 0)) as {
+      timePos?: number;
+      duration?: number;
+      paused?: boolean;
+    };
+
+    return {
+      needsRedraw: false,
+      frame: null,
+      width: 0,
+      height: 0,
+      timePos: typeof tick.timePos === 'number' ? tick.timePos : 0,
+      duration: typeof tick.duration === 'number' ? tick.duration : 0,
+      paused: Boolean(tick.paused),
+    };
+  } catch {
+    return emptyTick;
+  }
+});
+
+ipcMain.handle('mpv:getTrackList', async () => {
+  if (mpvUnavailable()) return [];
+  return mpvWorker.request('getTrackList');
+});
+
+ipcMain.handle('mpv:getSid', async () => {
+  if (mpvUnavailable()) return null;
+  return mpvWorker.request('getSid');
+});
+
+ipcMain.handle('mpv:getAid', async () => {
+  if (mpvUnavailable()) return null;
+  return mpvWorker.request('getAid');
+});
+
+ipcMain.handle('mpv:setSid', async (_event, trackId: number | 'no') => {
+  if (mpvUnavailable()) return;
+  await mpvWorker.request('setSid', trackId);
+});
+
+ipcMain.handle('mpv:setAid', async (_event, trackId: number) => {
+  if (mpvUnavailable()) return;
+  await mpvWorker.request('setAid', trackId);
+});
+
+ipcMain.handle('mpv:addSubtitle', async (_event, filePath: string) => {
+  if (mpvUnavailable()) return false;
+  return mpvWorker.request('addSubtitle', filePath);
+});
+
+ipcMain.handle('mpv:destroy', async () => {
+  mpvWorker.stop();
+});
+
+app.whenReady().then(() => {
+  configureContentSecurityPolicy();
+  Menu.setApplicationMenu(null);
+  createWindow();
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow();
+    }
+  });
+});
+
+app.on('window-all-closed', () => {
+  isShuttingDown = true;
+  mpvWorker.stop();
+  destroyVideoWindow();
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
+});
+
+app.on('before-quit', () => {
+  isShuttingDown = true;
+  mpvWorker.stop();
+  destroyVideoWindow();
+});
+
+process.on('uncaughtException', (error: NodeJS.ErrnoException) => {
+  if (error.code === 'EPIPE') return;
+});
