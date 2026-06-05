@@ -19,10 +19,22 @@ function getSystemNodePath(): string {
     return process.env.VIDSYNC_NODE_PATH;
   }
 
+  if (process.platform === 'win32') {
+    try {
+      const lines = execSync('where node', { encoding: 'utf8' })
+        .trim()
+        .split(/\r?\n/)
+        .filter(Boolean);
+      if (lines.length > 0) return lines[0];
+    } catch {
+      return 'node.exe';
+    }
+  }
+
   try {
     return execSync('which node', { encoding: 'utf8' }).trim();
   } catch {
-    return '/usr/bin/node';
+    return 'node';
   }
 }
 

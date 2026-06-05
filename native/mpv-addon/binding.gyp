@@ -54,8 +54,9 @@
         [
           "OS=='win'",
           {
-            "libraries": ["-lmpv"],
-            "include_dirs": ["<(module_root_dir)/deps/include"]
+            "include_dirs": ["<(module_root_dir)/deps/include"],
+            "library_dirs": ["<(module_root_dir)/deps/lib"],
+            "libraries": ["mpv.lib"]
           }
         ]
       ]
