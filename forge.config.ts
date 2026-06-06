@@ -21,6 +21,10 @@ const config: ForgeConfig = {
       './native/bundled-node',
     ],
   },
+  // Forge always runs @electron/rebuild during package; empty list = skip all modules.
+  rebuildConfig: {
+    onlyModules: [],
+  },
   makers: [
     new MakerSquirrel({
       name: 'vidsync',

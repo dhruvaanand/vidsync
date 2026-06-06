@@ -8,6 +8,7 @@
     "start": "node scripts/ensure-native-for-worker.js && electron-forge start",
     "start:client": "node scripts/launch-client.js",
     "package": "node scripts/prepare-package.js && electron-forge package",
+    "package:debug": "node scripts/forge-package-debug.js",
     "make": "node scripts/prepare-package.js && electron-forge make",
     "build:native": "cd native/mpv-addon && npm install && npx node-gyp build && node ../../scripts/copy-mpv-runtime.js && node ../../scripts/verify-native-build.js",
     "copy-mpv-runtime": "node scripts/copy-mpv-runtime.js",
