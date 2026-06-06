@@ -1,4 +1,5 @@
-import type { MpvTrack, VideoBounds } from '../../main/preload';
+import type { MpvTrack } from '../../main/preload';
+import { readMpvVideoBounds } from '../videoLayout';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const POLL_MS = 250;
@@ -44,17 +45,6 @@ function formatTrackLabel(track: MpvTrack) {
   return `Track ${track.id}${meta}`;
 }
 
-function readVideoBounds(host: HTMLElement): VideoBounds {
-  const rect = host.getBoundingClientRect();
-  const scale = window.devicePixelRatio || 1;
-  return {
-    x: Math.round(rect.left * scale) / scale,
-    y: Math.round(rect.top * scale) / scale,
-    width: Math.max(1, Math.round(rect.width * scale) / scale),
-    height: Math.max(1, Math.round(rect.height * scale) / scale),
-  };
-}
-
 export function useMpv(videoHostRef: React.RefObject<HTMLDivElement | null>) {
   const loopTimerRef = useRef<number | null>(null);
   const cancelledRef = useRef(false);
@@ -74,7 +64,7 @@ export function useMpv(videoHostRef: React.RefObject<HTMLDivElement | null>) {
     const host = videoHostRef.current;
     if (!host || !window.vidsync) return;
 
-    const bounds = readVideoBounds(host);
+    const bounds = readMpvVideoBounds(host);
     if (!attachedRef.current) {
       const ok = await window.vidsync.mpvAvailable(bounds);
       attachedRef.current = ok;

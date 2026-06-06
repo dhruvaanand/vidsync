@@ -3,7 +3,6 @@ import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerZIP } from '@electron-forge/maker-zip';
 import { MakerDeb } from '@electron-forge/maker-deb';
 import { MakerRpm } from '@electron-forge/maker-rpm';
-import { AutoUnpackNativesPlugin } from '@electron-forge/plugin-auto-unpack-natives';
 import { WebpackPlugin } from '@electron-forge/plugin-webpack';
 
 import { mainConfig } from './webpack.main.config';
@@ -14,15 +13,13 @@ const config: ForgeConfig = {
     asar: true,
     name: 'Vidsync',
     executableName: 'vidsync',
+    // MPV loads via forked worker + bundled Node — Electron never loads .node addons.
+    rebuild: false,
     extraResource: [
       './native/mpv-addon/build/Release',
       './native/mpv-worker',
       './native/bundled-node',
     ],
-  },
-  // mpv_addon.node is loaded by the forked worker using bundled/system Node, not Electron.
-  rebuildConfig: {
-    onlyModules: [],
   },
   makers: [
     new MakerSquirrel({
@@ -36,7 +33,6 @@ const config: ForgeConfig = {
     new MakerDeb({}),
   ],
   plugins: [
-    new AutoUnpackNativesPlugin({}),
     new WebpackPlugin({
       devContentSecurityPolicy:
         "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; " +

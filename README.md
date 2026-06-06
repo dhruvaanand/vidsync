@@ -170,6 +170,7 @@ Connect both clients to `http://localhost:3056`, join the same room. The guest m
 | `Module did not self-register` in `[mpv-worker]` | Electron rebuilt the addon for its own Node ABI. Run `npm run rebuild:native` (system Node). `npm start` now auto-fixes this; do **not** run `@electron/rebuild` on `mpv-addon` |
 | `EPERM` / `unlink avcodec-*.dll` during rebuild | Vidsync or MPV worker still running and locking DLLs. Run `npm run kill:vidsync` then `npm run rebuild:native` (or `rebuild:native:clean` for a full wipe) |
 | MPV worker failed to start | Run `where node` — if missing, install Node or set `VIDSYNC_NODE_PATH` |
+| `npm run make` / `package` hangs at “Preparing native dependencies”, no `out/` folder | Pull latest (`rebuild: false` in `forge.config.ts`). Then `npm run kill:vidsync` and `npm run package`. Or use `npm start` without packaging. |
 
 ```powershell
 $env:VIDSYNC_NODE_PATH = "C:\Program Files\nodejs\node.exe"

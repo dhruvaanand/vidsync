@@ -55,47 +55,50 @@ export default function VideoPlayer({
   onSubtitleChange,
   onLoadSubtitle,
 }: VideoPlayerProps) {
+  const isWin32 = window.vidsync?.platform === 'win32';
+
   return (
     <div className="video-shell">
       <div
         className={
-          window.vidsync?.platform === 'win32'
-            ? 'video-canvas-wrap video-canvas-wrap--win32'
-            : 'video-canvas-wrap'
+          isWin32 ? 'video-canvas-wrap video-canvas-wrap--win32' : 'video-canvas-wrap'
         }
       >
         <div
           ref={videoHostRef}
-          className={
-            window.vidsync?.platform === 'win32'
-              ? 'video-host video-host--win32'
-              : 'video-host'
-          }
+          className={isWin32 ? 'video-host video-host--win32' : 'video-host'}
         />
         {error && <div className="video-error">{error}</div>}
-      </div>
 
-      <div className="video-controls">
-        <button type="button" onClick={onTogglePause} disabled={!isHost}>
-          {paused ? 'Play' : 'Pause'}
-        </button>
+        <div className="video-controls-overlay">
+          <div className="video-controls">
+            <button
+              type="button"
+              className="video-play-btn"
+              onClick={onTogglePause}
+              disabled={!isHost}
+            >
+              {paused ? 'Play' : 'Pause'}
+            </button>
 
-        <input
-          type="range"
-          min={0}
-          max={Math.max(duration, 0.01)}
-          step={0.1}
-          value={Math.min(timePos, Math.max(duration, 0.01))}
-          onInput={(e) => onSeek(Number((e.target as HTMLInputElement).value))}
-          disabled={!isHost || duration <= 0}
-          className="seek-bar"
-        />
+            <input
+              type="range"
+              min={0}
+              max={Math.max(duration, 0.01)}
+              step={0.1}
+              value={Math.min(timePos, Math.max(duration, 0.01))}
+              onInput={(e) => onSeek(Number((e.target as HTMLInputElement).value))}
+              disabled={!isHost || duration <= 0}
+              className="seek-bar"
+            />
 
-        <span className="time-readout">
-          {formatTime(timePos)} / {formatTime(duration)}
-        </span>
+            <span className="time-readout">
+              {formatTime(timePos)} / {formatTime(duration)}
+            </span>
 
-        {!isHost && <span className="guest-hint">Host controls playback</span>}
+            {!isHost && <span className="guest-hint">Host controls playback</span>}
+          </div>
+        </div>
       </div>
 
       <TrackSelectors
