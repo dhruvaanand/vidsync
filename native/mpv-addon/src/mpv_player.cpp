@@ -72,10 +72,9 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
       mpv_set_option(mpv_, "wid", MPV_FORMAT_INT64, &wid);
       mpv_set_option_string(mpv_, "vo", "gpu");
       mpv_set_option_string(mpv_, "hwdec", "auto-safe");
+      mpv_set_option_string(mpv_, "force-window", "no");
 #if defined(_WIN32)
       mpv_set_option_string(mpv_, "gpu-context", "win");
-      mpv_set_option_string(mpv_, "gpu-api", "d3d11");
-      mpv_set_option_string(mpv_, "force-window", "yes");
 #endif
     } else {
       mpv_set_option_string(mpv_, "vo", "libmpv");
