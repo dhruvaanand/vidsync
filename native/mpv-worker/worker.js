@@ -4,7 +4,17 @@ const releaseDir =
   process.env.VIDSYNC_ADDON_ROOT ||
   path.join(__dirname, '..', 'mpv-addon', 'build', 'Release');
 
-const { MpvPlayer } = require(path.join(releaseDir, 'mpv_addon.node'));
+let MpvPlayer;
+try {
+  ({ MpvPlayer } = require(path.join(releaseDir, 'mpv_addon.node')));
+} catch (error) {
+  console.error(`Failed to load mpv_addon.node from ${releaseDir}`);
+  console.error(error instanceof Error ? error.message : error);
+  console.error(
+    'On Windows: run npm run build:native and ensure libmpv-2.dll is in the Release folder.',
+  );
+  process.exit(1);
+}
 
 /** @type {import('../mpv-addon').MpvPlayer | null} */
 let player = null;
@@ -29,6 +39,12 @@ function handleMessage(msg) {
         break;
       case 'load':
         result = ensurePlayer().load(args[0]);
+        break;
+      case 'waitForLoad':
+        result = ensurePlayer().waitForLoad(args[0] ?? 30000);
+        break;
+      case 'getLastError':
+        result = ensurePlayer().getLastError();
         break;
       case 'play':
         ensurePlayer().play();

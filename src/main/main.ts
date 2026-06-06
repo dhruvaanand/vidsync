@@ -169,8 +169,24 @@ ipcMain.handle(
 ipcMain.handle('mpv:loadError', () => mpvWorker.getLoadError());
 
 ipcMain.handle('mpv:load', async (_event, filePath: string) => {
+  if (mpvUnavailable()) {
+    throw new Error(mpvWorker.getLoadError() ?? 'MPV is not available');
+  }
+  const ok = await mpvWorker.request('load', filePath);
+  if (!ok) {
+    throw new Error('MPV rejected the load command');
+  }
+  return ok;
+});
+
+ipcMain.handle('mpv:waitForLoad', async (_event, timeoutMs = 30000) => {
   if (mpvUnavailable()) return false;
-  return mpvWorker.request('load', filePath);
+  return mpvWorker.request('waitForLoad', timeoutMs);
+});
+
+ipcMain.handle('mpv:getLastError', async () => {
+  if (mpvUnavailable()) return null;
+  return mpvWorker.request('getLastError');
 });
 
 ipcMain.handle('mpv:play', async () => {

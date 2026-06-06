@@ -42,6 +42,12 @@ const electronAPI = {
   mpvLoad: (filePath: string): Promise<boolean> =>
     ipcRenderer.invoke('mpv:load', filePath),
 
+  mpvWaitForLoad: (timeoutMs = 30000): Promise<boolean> =>
+    ipcRenderer.invoke('mpv:waitForLoad', timeoutMs),
+
+  mpvGetLastError: (): Promise<string | null> =>
+    ipcRenderer.invoke('mpv:getLastError'),
+
   mpvPlay: (): Promise<void> => ipcRenderer.invoke('mpv:play'),
 
   mpvPause: (): Promise<void> => ipcRenderer.invoke('mpv:pause'),

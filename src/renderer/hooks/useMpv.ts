@@ -176,16 +176,35 @@ export function useMpv(videoHostRef: React.RefObject<HTMLDivElement | null>) {
     if (!window.vidsync) return false;
     try {
       await syncVideoHost();
+
+      if (!attachedRef.current) {
+        const detail = (await window.vidsync.mpvLoadError?.()) ?? 'native MPV failed to start';
+        throw new Error(
+          `${detail}. Rebuild the addon (npm run build:native) and copy libmpv-2.dll into native/mpv-addon/build/Release/.`,
+        );
+      }
+
       await window.vidsync.mpvLoad(filePath);
+
+      const ready = await window.vidsync.mpvWaitForLoad?.(30000);
+      if (!ready) {
+        const mpvError = await window.vidsync.mpvGetLastError?.();
+        throw new Error(
+          mpvError ??
+            'Video did not load. On Windows, copy libmpv-2.dll next to mpv_addon.node in native/mpv-addon/build/Release/.',
+        );
+      }
+
       loadedFileRef.current = filePath;
       setLoadedFile(filePath);
       setError(null);
+      void refreshTracks();
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load file');
       return false;
     }
-  }, [syncVideoHost]);
+  }, [refreshTracks, syncVideoHost]);
 
   const play = useCallback(async () => {
     await window.vidsync?.mpvPlay();

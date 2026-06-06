@@ -72,7 +72,12 @@ export async function attachVideoHost(
   }
 
   // Let the window manager map the native surface before MPV embeds via wid.
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  const settleMs = process.platform === 'win32' ? 300 : 100;
+  await new Promise<void>((resolve) => {
+    const done = () => resolve();
+    host.once('ready-to-show', done);
+    setTimeout(done, settleMs);
+  });
   syncVideoWindowBounds();
 
   return getNativeWindowId(host);

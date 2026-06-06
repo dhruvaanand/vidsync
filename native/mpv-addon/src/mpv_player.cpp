@@ -7,10 +7,12 @@
 #include <dlfcn.h>
 #endif
 #include <atomic>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
@@ -20,6 +22,8 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
         DefineClass(env, "MpvPlayer",
                     {
                         InstanceMethod("load", &MpvPlayer::Load),
+                        InstanceMethod("waitForLoad", &MpvPlayer::WaitForLoad),
+                        InstanceMethod("getLastError", &MpvPlayer::GetLastError),
                         InstanceMethod("play", &MpvPlayer::Play),
                         InstanceMethod("pause", &MpvPlayer::Pause),
                         InstanceMethod("togglePause", &MpvPlayer::TogglePause),
@@ -67,6 +71,9 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
       mpv_set_option(mpv_, "wid", MPV_FORMAT_INT64, &wid);
       mpv_set_option_string(mpv_, "vo", "gpu");
       mpv_set_option_string(mpv_, "hwdec", "auto-safe");
+#if defined(_WIN32)
+      mpv_set_option_string(mpv_, "gpu-context", "win");
+#endif
     } else {
       mpv_set_option_string(mpv_, "vo", "libmpv");
       mpv_set_option_string(mpv_, "hwdec", "no");
@@ -101,6 +108,7 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
     }
 
     mpv_set_wakeup_callback(mpv_, &MpvPlayer::OnMpvEvents, this);
+    mpv_request_log_messages(mpv_, "warn");
   }
 
   ~MpvPlayer() { Cleanup(); }
@@ -132,6 +140,21 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
     while (true) {
       mpv_event* event = mpv_wait_event(mpv_, 0);
       if (event->event_id == MPV_EVENT_NONE) break;
+
+      if (event->event_id == MPV_EVENT_END_FILE) {
+        auto* end_file = static_cast<mpv_event_end_file*>(event->data);
+        if (end_file->reason == MPV_END_FILE_REASON_ERROR) {
+          const char* detail = mpv_error_string(end_file->error);
+          last_error_ = detail ? detail : "playback failed";
+        }
+      } else if (event->event_id == MPV_EVENT_LOG_MESSAGE) {
+        auto* message = static_cast<mpv_event_log_message*>(event->data);
+        if (message->level &&
+            (strcmp(message->level, "error") == 0 ||
+             strcmp(message->level, "fatal") == 0)) {
+          last_error_ = message->text ? message->text : "mpv error";
+        }
+      }
     }
     event_pending_.store(false);
   }
@@ -295,12 +318,49 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
     }
 
     std::string path = info[0].As<Napi::String>().Utf8Value();
+    last_error_.clear();
     const char* cmd[] = {"loadfile", path.c_str(), NULL};
-    int err = mpv_command_async(mpv_, 0, cmd);
+    int err = mpv_command(mpv_, cmd);
     if (err < 0) {
       Napi::Error::New(env, mpv_error_string(err)).ThrowAsJavaScriptException();
     }
     return Napi::Boolean::New(env, err >= 0);
+  }
+
+  Napi::Value WaitForLoad(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    int timeout_ms = 30000;
+    if (info.Length() >= 1 && info[0].IsNumber()) {
+      timeout_ms = info[0].As<Napi::Number>().Int32Value();
+    }
+
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+
+    while (std::chrono::steady_clock::now() < deadline) {
+      ProcessEvents();
+
+      if (!last_error_.empty()) {
+        Napi::Error::New(env, last_error_).ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+
+      if (GetPropertyDouble("duration", 0.0) > 0.0) {
+        return Napi::Boolean::New(env, true);
+      }
+
+      std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+
+    return Napi::Boolean::New(env, false);
+  }
+
+  Napi::Value GetLastError(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (last_error_.empty()) {
+      return env.Null();
+    }
+    return Napi::String::New(env, last_error_);
   }
 
   Napi::Value Play(const Napi::CallbackInfo& info) {
@@ -469,6 +529,7 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
   std::atomic<bool> event_pending_{false};
   std::atomic<bool> render_pending_{false};
   bool embed_mode_ = false;
+  std::string last_error_;
 };
 
 Napi::Object InitAll(Napi::Env env, Napi::Object exports) {

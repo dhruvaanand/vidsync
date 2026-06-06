@@ -55,8 +55,24 @@ function getAddonRoot(): string {
 }
 
 function getWorkerEnv(): NodeJS.ProcessEnv {
-  const env = { ...process.env, VIDSYNC_ADDON_ROOT: getAddonRoot() };
+  const addonRoot = getAddonRoot();
+  const env = { ...process.env, VIDSYNC_ADDON_ROOT: addonRoot };
   delete env.ELECTRON_RUN_AS_NODE;
+
+  if (process.platform === 'win32') {
+    const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'Path';
+    const existing = env[pathKey] ?? '';
+    env[pathKey] = existing ? `${addonRoot};${existing}` : addonRoot;
+  } else if (process.platform === 'linux') {
+    env.LD_LIBRARY_PATH = env.LD_LIBRARY_PATH
+      ? `${addonRoot}:${env.LD_LIBRARY_PATH}`
+      : addonRoot;
+  } else if (process.platform === 'darwin') {
+    env.DYLD_LIBRARY_PATH = env.DYLD_LIBRARY_PATH
+      ? `${addonRoot}:${env.DYLD_LIBRARY_PATH}`
+      : addonRoot;
+  }
+
   return env;
 }
 
@@ -81,12 +97,22 @@ export class MpvWorkerBridge {
       const nodePath = getSystemNodePath();
 
       try {
+        const isDev = process.env.NODE_ENV === 'development';
         this.child = fork(workerPath, [], {
           execPath: nodePath,
           env: getWorkerEnv(),
-          // Only IPC — piped stdio causes EPIPE when the worker exits uncleanly.
-          stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+          // Pipe stderr in dev so MPV/native load failures show in the terminal.
+          stdio: isDev ? ['ignore', 'ignore', 'pipe', 'ipc'] : ['ignore', 'ignore', 'ignore', 'ipc'],
         });
+
+        if (isDev && this.child.stderr) {
+          this.child.stderr.on('data', (chunk: Buffer) => {
+            const text = chunk.toString('utf8').trimEnd();
+            if (text) {
+              console.error('[mpv-worker]', text);
+            }
+          });
+        }
       } catch (error) {
         this.loadError =
           error instanceof Error ? error.message : 'Failed to spawn MPV worker';
