@@ -104,23 +104,21 @@ cd ..
 
 ### 4. Build the native addon
 
-Run from **PowerShell** or **x64 Native Tools Command Prompt for VS**:
+**Easiest (recommended after every `git pull`):**
+
+```powershell
+git pull
+npm run setup
+```
+
+That runs `npm install`, builds the addon, copies `libmpv-2.dll` + ffmpeg deps, verifies the build, and runs `test:mpv`.
+
+Or double-click `scripts\setup-windows.cmd` after `git pull`.
+
+**Manual steps** (if you prefer):
 
 ```powershell
 npm run build:native
-```
-
-Confirm the addon was built:
-
-```powershell
-dir native\mpv-addon\build\Release\mpv_addon.node
-```
-
-`npm run build:native` copies `libmpv-2.dll` and its ffmpeg dependency DLLs into `Release\` automatically. If video still fails:
-
-```powershell
-npm run build:native
-dir native\mpv-addon\build\Release\*.dll
 npm run test:mpv
 ```
 
@@ -350,6 +348,7 @@ vidsync/
 
 | Command | Description |
 |---------|-------------|
+| `npm run setup` | After `git pull`: install deps, build native, copy DLLs, verify, test MPV |
 | `npm start` | Start Electron app (dev) |
 | `npm run start:client` | Launch a second client window |
 | `npm run server` | Start sync server in dev mode |
