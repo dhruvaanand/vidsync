@@ -6,7 +6,7 @@ const releaseDir =
 
 /** @type {typeof import('../mpv-addon').MpvPlayer | undefined} */
 let MpvPlayer;
-/** @type {((x: number, y: number, w: number, h: number) => number) | undefined} */
+/** @type {((parentHwnd: number, x: number, y: number, w: number, h: number) => number) | undefined} */
 let createSurface;
 /** @type {((x: number, y: number, w: number, h: number) => void) | undefined} */
 let moveSurface;
@@ -82,7 +82,7 @@ function handleMessage(msg) {
         if (!createSurface) {
           throw new Error('createSurface is only available on Windows');
         }
-        result = createSurface(args[0], args[1], args[2], args[3]);
+        result = createSurface(args[0], args[1], args[2], args[3], args[4]);
         break;
       case 'moveSurface':
         if (!moveSurface) {

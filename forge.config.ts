@@ -12,19 +12,26 @@ import { rendererConfig } from './webpack.renderer.config';
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    name: 'Vidsync',
+    executableName: 'vidsync',
     extraResource: [
       './native/mpv-addon/build/Release',
       './native/mpv-worker',
+      './native/bundled-node',
     ],
   },
-  // mpv_addon.node is loaded by the forked worker using system Node, not Electron.
-  // Do not let Forge/@electron/rebuild replace it with an Electron ABI build.
+  // mpv_addon.node is loaded by the forked worker using bundled/system Node, not Electron.
   rebuildConfig: {
     onlyModules: [],
   },
   makers: [
-    new MakerSquirrel({}),
-    new MakerZIP({}, ['darwin']),
+    new MakerSquirrel({
+      name: 'vidsync',
+      authors: 'Vidsync',
+      description: 'Watch party desktop app with MPV video sync',
+      setupExe: 'vidsync-setup.exe',
+    }),
+    new MakerZIP({}, ['darwin', 'win32']),
     new MakerRpm({}),
     new MakerDeb({}),
   ],

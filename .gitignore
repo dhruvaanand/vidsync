@@ -9,6 +9,7 @@ dist/
 out/
 server/dist/
 native/mpv-addon/build/
+native/bundled-node/
 
 # Native / Electron artifacts
 *.node

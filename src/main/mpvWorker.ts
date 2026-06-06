@@ -15,9 +15,31 @@ type PendingRequest = {
   reject: (reason: Error) => void;
 };
 
+function getBundledNodePath(): string | null {
+  if (!app.isPackaged) return null;
+
+  const base = path.join(process.resourcesPath, 'bundled-node', process.platform, process.arch);
+  const candidates =
+    process.platform === 'win32' ? ['node.exe', 'node'] : ['node'];
+
+  for (const name of candidates) {
+    const candidate = path.join(base, name);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 function getSystemNodePath(): string {
   if (process.env.VIDSYNC_NODE_PATH) {
     return process.env.VIDSYNC_NODE_PATH;
+  }
+
+  const bundled = getBundledNodePath();
+  if (bundled) {
+    return bundled;
   }
 
   if (process.platform === 'win32') {

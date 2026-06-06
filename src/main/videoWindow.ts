@@ -12,6 +12,7 @@ let videoWindow: BrowserWindow | null = null;
 let lastBounds: VideoBounds | null = null;
 let parentWindow: BrowserWindow | null = null;
 let win32SurfaceHwnd = 0;
+let win32ParentHwnd = 0;
 
 function isWin32(): boolean {
   return process.platform === 'win32';
@@ -40,6 +41,21 @@ export function toScreenBounds(
   return {
     x: Math.round(content.x + bounds.x),
     y: Math.round(content.y + bounds.y),
+    width: Math.max(1, Math.round(bounds.width)),
+    height: Math.max(1, Math.round(bounds.height)),
+  };
+}
+
+/** Client-area coords for a WS_CHILD surface parented to the Electron HWND. */
+export function toClientBounds(bounds: VideoBounds): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+} {
+  return {
+    x: Math.round(bounds.x),
+    y: Math.round(bounds.y),
     width: Math.max(1, Math.round(bounds.width)),
     height: Math.max(1, Math.round(bounds.height)),
   };
@@ -101,13 +117,13 @@ async function syncWin32Surface(): Promise<void> {
   if (!parentWindow || parentWindow.isDestroyed() || !lastBounds) return;
   if (!mpvWorker.isAvailable()) return;
 
-  const screen = toScreenBounds(parentWindow, lastBounds);
+  const pos = toClientBounds(lastBounds);
   await mpvWorker.request(
     'moveSurface',
-    screen.x,
-    screen.y,
-    screen.width,
-    screen.height,
+    pos.x,
+    pos.y,
+    pos.width,
+    pos.height,
   );
 }
 
@@ -116,25 +132,30 @@ export async function ensureWin32Surface(bounds: VideoBounds): Promise<number> {
   if (!mpvWorker.isAvailable()) return 0;
 
   lastBounds = bounds;
-  const screen = toScreenBounds(parentWindow, bounds);
+  if (win32ParentHwnd <= 0) {
+    win32ParentHwnd = getNativeWindowId(parentWindow);
+  }
+
+  const client = toClientBounds(bounds);
 
   if (win32SurfaceHwnd > 0) {
     await mpvWorker.request(
       'moveSurface',
-      screen.x,
-      screen.y,
-      screen.width,
-      screen.height,
+      client.x,
+      client.y,
+      client.width,
+      client.height,
     );
     return win32SurfaceHwnd;
   }
 
   const hwnd = (await mpvWorker.request(
     'createSurface',
-    screen.x,
-    screen.y,
-    screen.width,
-    screen.height,
+    win32ParentHwnd,
+    client.x,
+    client.y,
+    client.width,
+    client.height,
   )) as number;
 
   win32SurfaceHwnd = typeof hwnd === 'number' ? hwnd : 0;
@@ -149,6 +170,7 @@ export async function attachVideoHost(
   lastBounds = bounds;
 
   if (isWin32()) {
+    win32ParentHwnd = getNativeWindowId(mainWin);
     return win32SurfaceHwnd;
   }
 
@@ -266,6 +288,7 @@ export async function destroyVideoWindow(): Promise<void> {
       }
     }
     win32SurfaceHwnd = 0;
+    win32ParentHwnd = 0;
     parentWindow = null;
     lastBounds = null;
     return;

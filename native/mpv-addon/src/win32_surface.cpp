@@ -9,6 +9,7 @@
 
 namespace {
 HWND g_surface_hwnd = nullptr;
+HWND g_parent_hwnd = nullptr;
 
 void EnsureClassRegistered() {
   static bool done = false;
@@ -34,15 +35,16 @@ HWND UintToHwnd(uintptr_t value) {
 
 Napi::Value Win32CreateSurface(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 4) {
-    Napi::TypeError::New(env, "expected x, y, width, height").ThrowAsJavaScriptException();
+  if (info.Length() < 5) {
+    Napi::TypeError::New(env, "expected parentHwnd, x, y, width, height").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
-  const int x = info[0].As<Napi::Number>().Int32Value();
-  const int y = info[1].As<Napi::Number>().Int32Value();
-  int w = info[2].As<Napi::Number>().Int32Value();
-  int h = info[3].As<Napi::Number>().Int32Value();
+  const uintptr_t parentArg = static_cast<uintptr_t>(info[0].As<Napi::Number>().Int64Value());
+  const int x = info[1].As<Napi::Number>().Int32Value();
+  const int y = info[2].As<Napi::Number>().Int32Value();
+  int w = info[3].As<Napi::Number>().Int32Value();
+  int h = info[4].As<Napi::Number>().Int32Value();
   if (w < 1) w = 1;
   if (h < 1) h = 1;
 
@@ -51,18 +53,30 @@ Napi::Value Win32CreateSurface(const Napi::CallbackInfo& info) {
   if (g_surface_hwnd) {
     DestroyWindow(g_surface_hwnd);
     g_surface_hwnd = nullptr;
+    g_parent_hwnd = nullptr;
+  }
+
+  g_parent_hwnd = parentArg > 0 ? UintToHwnd(parentArg) : nullptr;
+
+  DWORD exStyle = WS_EX_NOACTIVATE;
+  DWORD style = WS_VISIBLE;
+  if (g_parent_hwnd) {
+    style |= WS_CHILD | WS_CLIPSIBLINGS;
+  } else {
+    exStyle |= WS_EX_TOPMOST | WS_EX_TOOLWINDOW;
+    style |= WS_POPUP;
   }
 
   g_surface_hwnd = CreateWindowExW(
-      WS_EX_TOPMOST | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW,
+      exStyle,
       L"VidsyncMpvSurface",
       L"",
-      WS_POPUP | WS_VISIBLE,
+      style,
       x,
       y,
       w,
       h,
-      nullptr,
+      g_parent_hwnd,
       nullptr,
       GetModuleHandleW(nullptr),
       nullptr);
@@ -72,7 +86,20 @@ Napi::Value Win32CreateSurface(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  ShowWindow(g_surface_hwnd, SW_SHOWNOACTIVATE);
+  if (g_parent_hwnd) {
+    // Sit behind Chromium so HTML controls/chat stay on top; only covers the video panel rect.
+    SetWindowPos(
+        g_surface_hwnd,
+        HWND_BOTTOM,
+        0,
+        0,
+        0,
+        0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+  } else {
+    ShowWindow(g_surface_hwnd, SW_SHOWNOACTIVATE);
+  }
+
   UpdateWindow(g_surface_hwnd);
 
   return Napi::Number::New(env, static_cast<double>(HwndToUint(g_surface_hwnd)));
@@ -93,14 +120,10 @@ Napi::Value Win32MoveSurface(const Napi::CallbackInfo& info) {
   if (w < 1) w = 1;
   if (h < 1) h = 1;
 
-  SetWindowPos(
-      g_surface_hwnd,
-      HWND_TOPMOST,
-      x,
-      y,
-      w,
-      h,
-      SWP_NOACTIVATE | SWP_SHOWWINDOW);
+  const HWND insertAfter = g_parent_hwnd ? HWND_BOTTOM : HWND_TOPMOST;
+  const UINT flags = SWP_NOACTIVATE | SWP_SHOWWINDOW;
+
+  SetWindowPos(g_surface_hwnd, insertAfter, x, y, w, h, flags);
 
   return env.Undefined();
 }
@@ -119,6 +142,7 @@ Napi::Value Win32DestroySurface(const Napi::CallbackInfo& info) {
   if (g_surface_hwnd) {
     DestroyWindow(g_surface_hwnd);
     g_surface_hwnd = nullptr;
+    g_parent_hwnd = nullptr;
   }
   return env.Undefined();
 }

@@ -179,7 +179,11 @@ button.danger {
   pointer-events: none;
 }
 
-/* Windows uses a separate always-on-top native overlay for MPV video. */
+/* Windows: native child HWND sits under this panel — keep the hole transparent. */
+.video-canvas-wrap--win32 {
+  background: transparent;
+}
+
 .video-host--win32 {
   visibility: hidden;
 }

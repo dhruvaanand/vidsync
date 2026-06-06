@@ -77,7 +77,7 @@ function runWorkerSurface() {
     (async () => {
       try {
         await request('init', 0);
-        const hwnd = await request('createSurface', 100, 100, 1280, 720);
+        const hwnd = await request('createSurface', 0, 100, 100, 1280, 720);
         await request('setWid', hwnd);
         await request('load', testFile);
         const ready = await request('waitForLoad', 30000);

@@ -57,7 +57,13 @@ export default function VideoPlayer({
 }: VideoPlayerProps) {
   return (
     <div className="video-shell">
-      <div className="video-canvas-wrap">
+      <div
+        className={
+          window.vidsync?.platform === 'win32'
+            ? 'video-canvas-wrap video-canvas-wrap--win32'
+            : 'video-canvas-wrap'
+        }
+      >
         <div
           ref={videoHostRef}
           className={

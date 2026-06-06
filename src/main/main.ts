@@ -84,7 +84,7 @@ async function logMpvDiagnostics(context: string): Promise<void> {
     const surfaceHwnd = getVideoWindowId();
     console.log(`[mpv-diag] ${context}`, {
       surfaceHwnd,
-      embedMode: usesNativeWin32Surface() ? 'worker-hwnd' : 'electron-hwnd',
+      embedMode: usesNativeWin32Surface() ? 'worker-child-hwnd' : 'electron-hwnd',
       ...diag,
     });
   } catch (error) {
@@ -268,7 +268,7 @@ ipcMain.handle('mpv:diagnostics', async () => {
   const diag = await mpvWorker.request('getDiagnostics');
   return {
     surfaceHwnd: getVideoWindowId(),
-    embedMode: usesNativeWin32Surface() ? 'worker-hwnd' : 'electron-hwnd',
+    embedMode: usesNativeWin32Surface() ? 'worker-child-hwnd' : 'electron-hwnd',
     ...(diag as Record<string, unknown>),
   };
 });

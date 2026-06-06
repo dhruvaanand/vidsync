@@ -354,7 +354,8 @@ vidsync/
 | `npm run server` | Start sync server in dev mode |
 | `npm run build:native` | Build libmpv native addon |
 | `npm run rebuild:native` | Rebuild addon without reinstalling deps |
-| `npm run package` | Package app with Electron Forge |
+| `npm run package` | Unpacked app in `out/` (no installer) |
+| `npm run make` | Installer + zip (after `npm run setup`) |
 
 ## Environment variables
 
@@ -367,11 +368,33 @@ vidsync/
 
 ## Packaging
 
-```bash
-npm run package
+Build on the **same OS** you are targeting (Windows installer on Windows, etc.).
+
+```powershell
+git pull
+npm run setup
+npm run make
 ```
 
-Packaged builds bundle the native addon and MPV worker under `extraResource` (see `forge.config.ts`). Target machines still need libmpv available at runtime.
+Outputs (Windows):
+
+| Artifact | Location |
+|----------|----------|
+| Installer (Squirrel) | `out\make\squirrel.windows\x64\vidsync-setup.exe` |
+| Portable zip | `out\make\zip\win32\x64\Vidsync-win32-x64-*.zip` |
+| Unpacked app (test) | `out\Vidsync-win32-x64\` → run `vidsync.exe` |
+
+`npm run package` skips installers and only produces the unpacked folder under `out\`.
+
+**What gets bundled**
+
+- `mpv_addon.node` + `libmpv-2.dll` + ffmpeg runtime DLLs (`Release\`)
+- MPV worker (`mpv-worker\`)
+- Node binary for the worker (`bundled-node\`) — recipients do **not** need Node installed
+
+**Watch party server** is separate — run `npm run server` on a host machine (or deploy `server/`). The desktop app is the video client only.
+
+**First run on another PC:** install/run the built app, start your sync server, join a room, open a local MKV (each viewer needs their own copy of the file).
 
 ## License
 
