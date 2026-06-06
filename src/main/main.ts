@@ -11,6 +11,7 @@ import {
   attachVideoHost,
   bindVideoWindowSync,
   destroyVideoWindow,
+  getVideoWindowId,
   updateVideoBounds,
   type VideoBounds,
 } from './videoWindow';
@@ -51,17 +52,24 @@ function configureContentSecurityPolicy() {
   });
 }
 
+async function refreshMpvWid(): Promise<void> {
+  mpvWid = getVideoWindowId();
+  if (!mpvWorker.isAvailable() || mpvWid <= 0) return;
+
+  try {
+    await mpvWorker.request('setWid', mpvWid);
+  } catch {
+    // Worker may be shutting down.
+  }
+}
+
 async function ensureMpvForBounds(bounds: VideoBounds): Promise<boolean> {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
 
   mpvWid = await attachVideoHost(mainWindow, bounds);
 
   if (mpvWorker.isAvailable()) {
-    try {
-      await mpvWorker.request('setWid', mpvWid);
-    } catch {
-      // Worker may be shutting down.
-    }
+    await refreshMpvWid();
     return true;
   }
 
@@ -80,6 +88,7 @@ const createWindow = () => {
       contextIsolation: true,
       sandbox: false,
       nodeIntegration: false,
+      backgroundThrottling: false,
     },
   });
 
@@ -156,6 +165,7 @@ ipcMain.handle(
     if (updateBoundsOnly) {
       if (!mainWindow || !bounds) return false;
       updateVideoBounds(bounds);
+      await refreshMpvWid();
       return mpvWorker.isAvailable();
     }
 
@@ -181,6 +191,7 @@ ipcMain.handle('mpv:load', async (_event, filePath: string) => {
   if (!ok) {
     throw new Error('MPV rejected the load command');
   }
+  await refreshMpvWid();
   return ok;
 });
 

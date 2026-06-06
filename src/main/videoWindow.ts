@@ -11,12 +11,33 @@ let videoWindow: BrowserWindow | null = null;
 let lastBounds: VideoBounds | null = null;
 let parentWindow: BrowserWindow | null = null;
 
+function isWin32(): boolean {
+  return process.platform === 'win32';
+}
+
 export function getNativeWindowId(win: BrowserWindow): number {
   const handle = win.getNativeWindowHandle();
-  if (process.platform === 'darwin' || process.platform === 'win32') {
+  if (process.platform === 'darwin') {
     return Number(handle.readBigUInt64LE(0));
   }
+  if (isWin32()) {
+    return handle.readUInt32LE(0);
+  }
   return handle.readUInt32LE(0);
+}
+
+function showVideoSurface() {
+  if (!videoWindow || videoWindow.isDestroyed()) return;
+
+  syncVideoWindowBounds();
+
+  if (isWin32()) {
+    videoWindow.show();
+    videoWindow.setAlwaysOnTop(true, 'screen-saver');
+    return;
+  }
+
+  videoWindow.showInactive();
 }
 
 function ensureVideoWindow(parent: BrowserWindow): BrowserWindow {
@@ -24,8 +45,10 @@ function ensureVideoWindow(parent: BrowserWindow): BrowserWindow {
     return videoWindow;
   }
 
+  // Windows: owned child HWNDs sit behind Chromium. Use a borderless overlay
+  // positioned over the measured video panel instead.
   videoWindow = new BrowserWindow({
-    parent,
+    ...(isWin32() ? {} : { parent }),
     modal: false,
     show: false,
     frame: false,
@@ -40,6 +63,7 @@ function ensureVideoWindow(parent: BrowserWindow): BrowserWindow {
     minimizable: false,
     maximizable: false,
     fullscreenable: false,
+    alwaysOnTop: isWin32(),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -51,6 +75,8 @@ function ensureVideoWindow(parent: BrowserWindow): BrowserWindow {
   videoWindow.setIgnoreMouseEvents(true, { forward: true });
 
   if (process.platform === 'linux') {
+    videoWindow.setAlwaysOnTop(true, 'screen-saver');
+  } else if (isWin32()) {
     videoWindow.setAlwaysOnTop(true, 'screen-saver');
   }
 
@@ -68,7 +94,7 @@ export async function attachVideoHost(
   syncVideoWindowBounds();
 
   if (!host.isVisible()) {
-    host.showInactive();
+    showVideoSurface();
   }
 
   // Let the window manager map the native surface before MPV embeds via wid.
@@ -86,6 +112,11 @@ export async function attachVideoHost(
 export function updateVideoBounds(bounds: VideoBounds) {
   lastBounds = bounds;
   syncVideoWindowBounds();
+}
+
+export function getVideoWindowId(): number {
+  if (!videoWindow || videoWindow.isDestroyed()) return 0;
+  return getNativeWindowId(videoWindow);
 }
 
 function syncVideoWindowBounds() {
@@ -121,10 +152,7 @@ export function bindVideoWindowSync(mainWin: BrowserWindow) {
   });
 
   mainWin.on('restore', () => {
-    syncVideoWindowBounds();
-    if (videoWindow && !videoWindow.isDestroyed()) {
-      videoWindow.showInactive();
-    }
+    showVideoSurface();
   });
 
   mainWin.on('hide', () => {
@@ -134,12 +162,26 @@ export function bindVideoWindowSync(mainWin: BrowserWindow) {
   });
 
   mainWin.on('show', () => {
-    syncVideoWindowBounds();
-    if (videoWindow && !videoWindow.isDestroyed()) {
-      videoWindow.showInactive();
-    }
+    showVideoSurface();
   });
 
+  if (isWin32()) {
+    const liftOverlay = () => {
+      if (videoWindow && !videoWindow.isDestroyed()) {
+        syncVideoWindowBounds();
+        videoWindow.setAlwaysOnTop(true, 'screen-saver');
+      }
+    };
+    const dropOverlay = () => {
+      if (videoWindow && !videoWindow.isDestroyed()) {
+        videoWindow.setAlwaysOnTop(false);
+      }
+    };
+
+    mainWin.on('focus', liftOverlay);
+    mainWin.on('blur', dropOverlay);
+    liftOverlay();
+  }
 }
 
 export function destroyVideoWindow() {

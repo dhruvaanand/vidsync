@@ -58,7 +58,14 @@ export default function VideoPlayer({
   return (
     <div className="video-shell">
       <div className="video-canvas-wrap">
-        <div ref={videoHostRef} className="video-host" />
+        <div
+          ref={videoHostRef}
+          className={
+            window.vidsync?.platform === 'win32'
+              ? 'video-host video-host--win32'
+              : 'video-host'
+          }
+        />
         {error && <div className="video-error">{error}</div>}
       </div>
 

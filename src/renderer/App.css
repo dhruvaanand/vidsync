@@ -175,10 +175,13 @@ button.danger {
   width: 100%;
   height: 100%;
   display: block;
-  /* Must stay transparent so the native MPV child window can show through
-     (on Windows the Chromium layer paints above owned child HWNDs). */
   background: transparent;
   pointer-events: none;
+}
+
+/* Windows uses a separate always-on-top native overlay for MPV video. */
+.video-host--win32 {
+  visibility: hidden;
 }
 
 .video-error {

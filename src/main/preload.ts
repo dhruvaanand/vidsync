@@ -26,6 +26,8 @@ export interface VideoBounds {
 }
 
 const electronAPI = {
+  platform: process.platform,
+
   openVideoDialog: (): Promise<string | null> =>
     ipcRenderer.invoke('dialog:openVideo'),
 

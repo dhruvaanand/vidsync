@@ -527,6 +527,10 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
 
     int64_t wid = static_cast<int64_t>(info[0].As<Napi::Number>().Int64Value());
     mpv_set_property(mpv_, "wid", MPV_FORMAT_INT64, &wid);
+    if (embed_mode_) {
+      const char* cmd[] = {"vo", "gpu", NULL};
+      mpv_command(mpv_, cmd);
+    }
     return env.Undefined();
   }
 
