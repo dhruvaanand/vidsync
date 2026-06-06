@@ -2,7 +2,7 @@
   "name": "vidsync",
   "version": "1.0.0",
   "description": "Cross-platform desktop watch party app with MPV and Socket.io sync",
-  "main": ".webpack/main/index.js",
+  "main": ".webpack/main",
   "scripts": {
     "setup": "node scripts/setup.js",
     "start": "node scripts/ensure-native-for-worker.js && electron-forge start",

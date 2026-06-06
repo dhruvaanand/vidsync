@@ -17,5 +17,5 @@ export const mainConfig: Configuration = {
   resolve: {
     extensions: ['.ts', '.js'],
   },
-  // Output path/filename are set by @electron-forge/plugin-webpack (.webpack/main/index.js)
+  // Output: .webpack/main/index.js — package.json "main" must be ".webpack/main" for Forge.
 };
