@@ -1,4 +1,5 @@
 import { ChildProcess, execSync, fork } from 'child_process';
+import fs from 'fs';
 import path from 'path';
 import { app } from 'electron';
 
@@ -54,6 +55,31 @@ function getAddonRoot(): string {
   return path.join(app.getAppPath(), 'native', 'mpv-addon', 'build', 'Release');
 }
 
+function getWindowsMsysBinDirs(): string[] {
+  const roots = [
+    process.env.VIDSYNC_MSYS2_ROOT,
+    process.env.MSYS2_ROOT,
+    'C:\\msys64',
+    'C:\\msys32',
+  ].filter(Boolean) as string[];
+
+  const flavors = ['ucrt64', 'mingw64', 'clang64'];
+  const bins: string[] = [];
+
+  if (process.env.VIDSYNC_MSYS2_BIN) {
+    bins.push(process.env.VIDSYNC_MSYS2_BIN);
+  }
+
+  for (const root of roots) {
+    for (const flavor of flavors) {
+      bins.push(path.join(root, flavor, 'bin'));
+    }
+    bins.push(path.join(root, 'usr', 'bin'));
+  }
+
+  return [...new Set(bins)].filter((dir) => fs.existsSync(dir));
+}
+
 function getWorkerEnv(): NodeJS.ProcessEnv {
   const addonRoot = getAddonRoot();
   const env = { ...process.env, VIDSYNC_ADDON_ROOT: addonRoot };
@@ -62,7 +88,8 @@ function getWorkerEnv(): NodeJS.ProcessEnv {
   if (process.platform === 'win32') {
     const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'Path';
     const existing = env[pathKey] ?? '';
-    env[pathKey] = existing ? `${addonRoot};${existing}` : addonRoot;
+    const prefix = [addonRoot, ...getWindowsMsysBinDirs()];
+    env[pathKey] = existing ? `${prefix.join(';')};${existing}` : prefix.join(';');
   } else if (process.platform === 'linux') {
     env.LD_LIBRARY_PATH = env.LD_LIBRARY_PATH
       ? `${addonRoot}:${env.LD_LIBRARY_PATH}`

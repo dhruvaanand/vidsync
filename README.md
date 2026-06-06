@@ -166,6 +166,7 @@ Connect both clients to `http://localhost:3056`, join the same room. The guest m
 | `dlfcn.h` not found | Pull latest repo — Linux-only targets are now skipped on Windows |
 | Link error for `mpv.lib` | Put the import lib in `native/mpv-addon/deps/lib/` |
 | App opens but no video | Copy `libmpv-2.dll` into `native/mpv-addon/build/Release/` |
+| `The specified module could not be found` loading `mpv_addon.node` | `libmpv-2.dll` needs MSYS2/ffmpeg DLLs — install MSYS2 mpv; Vidsync adds `C:\msys64\ucrt64\bin` to the worker PATH automatically. Test with `npm run test:mpv` |
 | MPV worker failed to start | Run `where node` — if missing, install Node or set `VIDSYNC_NODE_PATH` |
 
 ```powershell

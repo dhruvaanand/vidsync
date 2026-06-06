@@ -9,6 +9,9 @@
 const { fork } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { getMsysBinCandidates, prependWindowsMpvPath } = require(
+  path.join(__dirname, '..', 'native', 'mpv-worker', 'mpv-windows-path'),
+);
 
 const repoRoot = path.join(__dirname, '..');
 const releaseDir = path.join(repoRoot, 'native', 'mpv-addon', 'build', 'Release');
@@ -48,17 +51,8 @@ try {
 } catch (error) {
   fail(
     `addon failed to load: ${error instanceof Error ? error.message : error}\n` +
-      'Ensure libmpv-2.dll is in the Release folder (Windows).',
+      'On Windows: libmpv-2.dll needs MSYS2 DLLs. Add C:\\msys64\\ucrt64\\bin to PATH.',
   );
-}
-
-const env = {
-  ...process.env,
-  VIDSYNC_ADDON_ROOT: releaseDir,
-};
-if (process.platform === 'win32') {
-  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'Path';
-  env[pathKey] = env[pathKey] ? `${releaseDir};${env[pathKey]}` : releaseDir;
 }
 
 const child = fork(workerPath, [], {
