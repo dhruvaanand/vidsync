@@ -16,12 +16,21 @@ let showSurface;
 let destroySurface;
 /** @type {(() => number) | undefined} */
 let getSurfaceHwnd;
+/** @type {(() => void) | undefined} */
+let pumpMessages;
 
 try {
   const addon = require(path.join(releaseDir, 'mpv_addon.node'));
   ({ MpvPlayer } = addon);
   if (process.platform === 'win32') {
-    ({ createSurface, moveSurface, showSurface, destroySurface, getSurfaceHwnd } = addon);
+    ({
+      createSurface,
+      moveSurface,
+      showSurface,
+      destroySurface,
+      getSurfaceHwnd,
+      pumpMessages,
+    } = addon);
   }
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
@@ -207,6 +216,16 @@ function handleMessage(msg) {
       error: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+if (process.platform === 'win32' && pumpMessages) {
+  setInterval(() => {
+    try {
+      pumpMessages();
+    } catch {
+      // Surface may be destroyed during shutdown.
+    }
+  }, 16);
 }
 
 process.on('message', handleMessage);

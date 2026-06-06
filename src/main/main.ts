@@ -115,7 +115,15 @@ async function ensureMpvForBounds(bounds: VideoBounds): Promise<boolean> {
     mpvWid = await ensureWin32Surface(bounds);
     if (mpvWid <= 0) return false;
 
-    await mpvWorker.request('setWid', mpvWid);
+    setWin32SurfaceHwnd(mpvWid);
+
+    // First start uses wid=0 (headless). Re-init player with the real HWND so vo=gpu embeds.
+    const diag = (await mpvWorker.request('getDiagnostics')) as { embedMode?: boolean };
+    if (!diag.embedMode) {
+      await mpvWorker.request('reset', mpvWid);
+    } else {
+      await mpvWorker.request('setWid', mpvWid);
+    }
     return true;
   }
 

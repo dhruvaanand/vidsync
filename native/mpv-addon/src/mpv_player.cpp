@@ -544,6 +544,10 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
     int64_t wid = static_cast<int64_t>(info[0].As<Napi::Number>().Int64Value());
     if (embed_mode_) {
       ReinitEmbeddedVo(wid);
+    } else if (wid > 0) {
+      // Worker often starts headless (wid=0) before createSurface; promote to embed vo.
+      embed_mode_ = true;
+      ReinitEmbeddedVo(wid);
     } else {
       mpv_set_property(mpv_, "wid", MPV_FORMAT_INT64, &wid);
       last_wid_ = wid;

@@ -129,12 +129,23 @@ Napi::Value Win32GetSurfaceHwnd(const Napi::CallbackInfo& info) {
   return Napi::Number::New(env, static_cast<double>(HwndToUint(g_surface_hwnd)));
 }
 
+Napi::Value Win32PumpMessages(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  MSG msg{};
+  while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
+    TranslateMessage(&msg);
+    DispatchMessageW(&msg);
+  }
+  return env.Undefined();
+}
+
 void RegisterWin32Surface(Napi::Env env, Napi::Object exports) {
   exports.Set("createSurface", Napi::Function::New(env, Win32CreateSurface));
   exports.Set("moveSurface", Napi::Function::New(env, Win32MoveSurface));
   exports.Set("showSurface", Napi::Function::New(env, Win32ShowSurface));
   exports.Set("destroySurface", Napi::Function::New(env, Win32DestroySurface));
   exports.Set("getSurfaceHwnd", Napi::Function::New(env, Win32GetSurfaceHwnd));
+  exports.Set("pumpMessages", Napi::Function::New(env, Win32PumpMessages));
 }
 
 #endif
