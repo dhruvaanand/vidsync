@@ -9,7 +9,7 @@
 
 namespace {
 HWND g_surface_hwnd = nullptr;
-HWND g_parent_hwnd = nullptr;
+HWND g_owner_hwnd = nullptr;
 
 void EnsureClassRegistered() {
   static bool done = false;
@@ -31,16 +31,33 @@ uintptr_t HwndToUint(HWND hwnd) {
 HWND UintToHwnd(uintptr_t value) {
   return reinterpret_cast<HWND>(value);
 }
+
+bool UsesOwnedPopup() {
+  return g_owner_hwnd != nullptr;
+}
+
+void RaiseSurfaceZOrder() {
+  if (!g_surface_hwnd) return;
+  const HWND insertAfter = UsesOwnedPopup() ? HWND_TOP : HWND_TOPMOST;
+  SetWindowPos(
+      g_surface_hwnd,
+      insertAfter,
+      0,
+      0,
+      0,
+      0,
+      SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+}
 }  // namespace
 
 Napi::Value Win32CreateSurface(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 5) {
-    Napi::TypeError::New(env, "expected parentHwnd, x, y, width, height").ThrowAsJavaScriptException();
+    Napi::TypeError::New(env, "expected ownerHwnd, x, y, width, height").ThrowAsJavaScriptException();
     return env.Undefined();
   }
 
-  const uintptr_t parentArg = static_cast<uintptr_t>(info[0].As<Napi::Number>().Int64Value());
+  const uintptr_t ownerArg = static_cast<uintptr_t>(info[0].As<Napi::Number>().Int64Value());
   const int x = info[1].As<Napi::Number>().Int32Value();
   const int y = info[2].As<Napi::Number>().Int32Value();
   int w = info[3].As<Napi::Number>().Int32Value();
@@ -53,18 +70,20 @@ Napi::Value Win32CreateSurface(const Napi::CallbackInfo& info) {
   if (g_surface_hwnd) {
     DestroyWindow(g_surface_hwnd);
     g_surface_hwnd = nullptr;
-    g_parent_hwnd = nullptr;
+    g_owner_hwnd = nullptr;
   }
 
-  g_parent_hwnd = parentArg > 0 ? UintToHwnd(parentArg) : nullptr;
+  g_owner_hwnd = ownerArg > 0 ? UintToHwnd(ownerArg) : nullptr;
 
-  DWORD exStyle = WS_EX_NOACTIVATE;
-  DWORD style = WS_VISIBLE;
-  if (g_parent_hwnd) {
-    style |= WS_CHILD | WS_CLIPSIBLINGS;
+  DWORD exStyle = WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
+  DWORD style = WS_POPUP | WS_VISIBLE;
+  HWND windowParent = nullptr;
+
+  if (g_owner_hwnd) {
+    // Owned popup: stacks above the Electron window (incl. Chromium) but not HWND_TOPMOST globally.
+    windowParent = g_owner_hwnd;
   } else {
-    exStyle |= WS_EX_TOPMOST | WS_EX_TOOLWINDOW;
-    style |= WS_POPUP;
+    exStyle |= WS_EX_TOPMOST;
   }
 
   g_surface_hwnd = CreateWindowExW(
@@ -76,7 +95,7 @@ Napi::Value Win32CreateSurface(const Napi::CallbackInfo& info) {
       y,
       w,
       h,
-      g_parent_hwnd,
+      windowParent,
       nullptr,
       GetModuleHandleW(nullptr),
       nullptr);
@@ -86,22 +105,9 @@ Napi::Value Win32CreateSurface(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  if (g_parent_hwnd) {
-    // Child of the Electron HWND: HWND_TOP stacks above Chromium in the video panel only
-    // (not HWND_TOPMOST — that escaped onto other apps).
-    SetWindowPos(
-        g_surface_hwnd,
-        HWND_TOP,
-        0,
-        0,
-        0,
-        0,
-        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-  } else {
-    ShowWindow(g_surface_hwnd, SW_SHOWNOACTIVATE);
-  }
-
+  ShowWindow(g_surface_hwnd, SW_SHOWNOACTIVATE);
   UpdateWindow(g_surface_hwnd);
+  RaiseSurfaceZOrder();
 
   return Napi::Number::New(env, static_cast<double>(HwndToUint(g_surface_hwnd)));
 }
@@ -121,27 +127,15 @@ Napi::Value Win32MoveSurface(const Napi::CallbackInfo& info) {
   if (w < 1) w = 1;
   if (h < 1) h = 1;
 
-  const HWND insertAfter = g_parent_hwnd ? HWND_TOP : HWND_TOPMOST;
-  const UINT flags = SWP_NOACTIVATE | SWP_SHOWWINDOW;
-
-  SetWindowPos(g_surface_hwnd, insertAfter, x, y, w, h, flags);
+  const HWND insertAfter = UsesOwnedPopup() ? HWND_TOP : HWND_TOPMOST;
+  SetWindowPos(g_surface_hwnd, insertAfter, x, y, w, h, SWP_NOACTIVATE | SWP_SHOWWINDOW);
 
   return env.Undefined();
 }
 
 Napi::Value Win32RaiseSurface(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!g_surface_hwnd) return env.Undefined();
-
-  const HWND insertAfter = g_parent_hwnd ? HWND_TOP : HWND_TOPMOST;
-  SetWindowPos(
-      g_surface_hwnd,
-      insertAfter,
-      0,
-      0,
-      0,
-      0,
-      SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+  RaiseSurfaceZOrder();
   return env.Undefined();
 }
 
@@ -159,7 +153,7 @@ Napi::Value Win32DestroySurface(const Napi::CallbackInfo& info) {
   if (g_surface_hwnd) {
     DestroyWindow(g_surface_hwnd);
     g_surface_hwnd = nullptr;
-    g_parent_hwnd = nullptr;
+    g_owner_hwnd = nullptr;
   }
   return env.Undefined();
 }

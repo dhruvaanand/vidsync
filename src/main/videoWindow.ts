@@ -64,6 +64,7 @@ export function toClientBounds(bounds: VideoBounds): {
 async function liftWin32Surface() {
   if (!mpvWorker.isAvailable()) return;
   await syncWin32Surface();
+  await mpvWorker.request('showSurface', true);
   await mpvWorker.request('raiseSurface');
 }
 
@@ -124,13 +125,13 @@ async function syncWin32Surface(): Promise<void> {
   if (!parentWindow || parentWindow.isDestroyed() || !lastBounds) return;
   if (!mpvWorker.isAvailable()) return;
 
-  const pos = toClientBounds(lastBounds);
+  const screen = toScreenBounds(parentWindow, lastBounds);
   await mpvWorker.request(
     'moveSurface',
-    pos.x,
-    pos.y,
-    pos.width,
-    pos.height,
+    screen.x,
+    screen.y,
+    screen.width,
+    screen.height,
   );
 }
 
@@ -143,15 +144,15 @@ export async function ensureWin32Surface(bounds: VideoBounds): Promise<number> {
     win32ParentHwnd = getNativeWindowId(parentWindow);
   }
 
-  const client = toClientBounds(bounds);
+  const screen = toScreenBounds(parentWindow, bounds);
 
   if (win32SurfaceHwnd > 0) {
     await mpvWorker.request(
       'moveSurface',
-      client.x,
-      client.y,
-      client.width,
-      client.height,
+      screen.x,
+      screen.y,
+      screen.width,
+      screen.height,
     );
     return win32SurfaceHwnd;
   }
@@ -159,10 +160,10 @@ export async function ensureWin32Surface(bounds: VideoBounds): Promise<number> {
   const hwnd = (await mpvWorker.request(
     'createSurface',
     win32ParentHwnd,
-    client.x,
-    client.y,
-    client.width,
-    client.height,
+    screen.x,
+    screen.y,
+    screen.width,
+    screen.height,
   )) as number;
 
   win32SurfaceHwnd = typeof hwnd === 'number' ? hwnd : 0;
@@ -250,6 +251,12 @@ export function bindVideoWindowSync(mainWin: BrowserWindow) {
   mainWin.on('maximize', sync);
   mainWin.on('unmaximize', sync);
   mainWin.on('focus', sync);
+
+  mainWin.on('blur', () => {
+    if (isWin32() && mpvWorker.isAvailable()) {
+      void mpvWorker.request('showSurface', false);
+    }
+  });
 
   mainWin.on('minimize', () => {
     if (isWin32()) {
