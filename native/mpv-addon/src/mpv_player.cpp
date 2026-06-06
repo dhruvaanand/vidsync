@@ -620,11 +620,19 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
   std::string last_error_;
 };
 
+#if defined(_WIN32)
+void RegisterWin32Surface(Napi::Env env, Napi::Object exports);
+#endif
+
 Napi::Object InitAll(Napi::Env env, Napi::Object exports) {
 #if defined(__linux__)
   dlopen("libvulkan.so.1", RTLD_NOW | RTLD_GLOBAL);
 #endif
-  return MpvPlayer::Init(env, exports);
+  MpvPlayer::Init(env, exports);
+#if defined(_WIN32)
+  RegisterWin32Surface(env, exports);
+#endif
+  return exports;
 }
 
 NODE_API_MODULE(mpv_addon, InitAll)

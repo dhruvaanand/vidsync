@@ -4,9 +4,25 @@ const releaseDir =
   process.env.VIDSYNC_ADDON_ROOT ||
   path.join(__dirname, '..', 'mpv-addon', 'build', 'Release');
 
+/** @type {typeof import('../mpv-addon').MpvPlayer | undefined} */
 let MpvPlayer;
+/** @type {((x: number, y: number, w: number, h: number) => number) | undefined} */
+let createSurface;
+/** @type {((x: number, y: number, w: number, h: number) => void) | undefined} */
+let moveSurface;
+/** @type {((visible?: boolean) => void) | undefined} */
+let showSurface;
+/** @type {(() => void) | undefined} */
+let destroySurface;
+/** @type {(() => number) | undefined} */
+let getSurfaceHwnd;
+
 try {
-  ({ MpvPlayer } = require(path.join(releaseDir, 'mpv_addon.node')));
+  const addon = require(path.join(releaseDir, 'mpv_addon.node'));
+  ({ MpvPlayer } = addon);
+  if (process.platform === 'win32') {
+    ({ createSurface, moveSurface, showSurface, destroySurface, getSurfaceHwnd } = addon);
+  }
 } catch (error) {
   console.error(`Failed to load mpv_addon.node from ${releaseDir}`);
   console.error(error instanceof Error ? error.message : error);
@@ -26,6 +42,12 @@ function ensurePlayer(wid = 0) {
   return player;
 }
 
+function teardownSurface() {
+  if (destroySurface) {
+    destroySurface();
+  }
+}
+
 function handleMessage(msg) {
   const { id, method, args = [] } = msg;
 
@@ -36,6 +58,33 @@ function handleMessage(msg) {
       case 'init':
         ensurePlayer(args[0] ?? 0);
         result = true;
+        break;
+      case 'createSurface':
+        if (!createSurface) {
+          throw new Error('createSurface is only available on Windows');
+        }
+        result = createSurface(args[0], args[1], args[2], args[3]);
+        break;
+      case 'moveSurface':
+        if (!moveSurface) {
+          throw new Error('moveSurface is only available on Windows');
+        }
+        moveSurface(args[0], args[1], args[2], args[3]);
+        result = true;
+        break;
+      case 'showSurface':
+        if (!showSurface) {
+          throw new Error('showSurface is only available on Windows');
+        }
+        showSurface(args[0]);
+        result = true;
+        break;
+      case 'destroySurface':
+        teardownSurface();
+        result = true;
+        break;
+      case 'getSurfaceHwnd':
+        result = getSurfaceHwnd ? getSurfaceHwnd() : 0;
         break;
       case 'setWid':
         ensurePlayer().setWid(args[0] ?? 0);
@@ -117,6 +166,7 @@ function handleMessage(msg) {
           player.destroy();
           player = null;
         }
+        teardownSurface();
         result = true;
         break;
       default:
@@ -156,5 +206,6 @@ process.on('disconnect', () => {
     player.destroy();
     player = null;
   }
+  teardownSurface();
   process.exit(0);
 });

@@ -10,10 +10,13 @@ import { mpvWorker } from './mpvWorker';
 import {
   attachVideoHost,
   bindVideoWindowSync,
+  ensureWin32Surface,
   destroyVideoWindow,
   getLastVideoBounds,
   getVideoWindowId,
+  setWin32SurfaceHwnd,
   updateVideoBounds,
+  usesNativeWin32Surface,
   type VideoBounds,
 } from './videoWindow';
 
@@ -54,7 +57,16 @@ function configureContentSecurityPolicy() {
 }
 
 async function refreshMpvWid(): Promise<void> {
-  mpvWid = getVideoWindowId();
+  if (usesNativeWin32Surface() && mpvWorker.isAvailable()) {
+    const hwnd = (await mpvWorker.request('getSurfaceHwnd')) as number;
+    if (typeof hwnd === 'number' && hwnd > 0) {
+      mpvWid = hwnd;
+      setWin32SurfaceHwnd(hwnd);
+    }
+  } else {
+    mpvWid = getVideoWindowId();
+  }
+
   if (!mpvWorker.isAvailable() || mpvWid <= 0) return;
 
   try {
@@ -69,9 +81,10 @@ async function logMpvDiagnostics(context: string): Promise<void> {
 
   try {
     const diag = (await mpvWorker.request('getDiagnostics')) as Record<string, unknown>;
-    const electronHwnd = getVideoWindowId();
+    const surfaceHwnd = getVideoWindowId();
     console.log(`[mpv-diag] ${context}`, {
-      electronHwnd,
+      surfaceHwnd,
+      embedMode: usesNativeWin32Surface() ? 'worker-hwnd' : 'electron-hwnd',
       ...diag,
     });
   } catch (error) {
@@ -83,13 +96,28 @@ async function restartMpvEmbed(bounds: VideoBounds): Promise<boolean> {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
 
   mpvWorker.stop();
-  destroyVideoWindow();
-  mpvWid = await attachVideoHost(mainWindow, bounds);
-  return mpvWorker.start(mpvWid);
+  await destroyVideoWindow();
+  mpvWid = 0;
+  return ensureMpvForBounds(bounds);
 }
 
 async function ensureMpvForBounds(bounds: VideoBounds): Promise<boolean> {
   if (!mainWindow || mainWindow.isDestroyed()) return false;
+
+  if (usesNativeWin32Surface()) {
+    await attachVideoHost(mainWindow, bounds);
+
+    if (!mpvWorker.isAvailable()) {
+      const started = await mpvWorker.start(0);
+      if (!started) return false;
+    }
+
+    mpvWid = await ensureWin32Surface(bounds);
+    if (mpvWid <= 0) return false;
+
+    await mpvWorker.request('setWid', mpvWid);
+    return true;
+  }
 
   mpvWid = await attachVideoHost(mainWindow, bounds);
 
@@ -136,7 +164,7 @@ const createWindow = () => {
   mainWindow.on('close', () => {
     isShuttingDown = true;
     mpvWorker.stop();
-    destroyVideoWindow();
+    void destroyVideoWindow();
   });
 
   mainWindow.on('closed', () => {
@@ -209,13 +237,7 @@ ipcMain.handle(
 ipcMain.handle('mpv:loadError', () => mpvWorker.getLoadError());
 
 ipcMain.handle('mpv:load', async (_event, filePath: string) => {
-  const bounds = getLastVideoBounds();
-  if (process.platform === 'win32' && bounds) {
-    const restarted = await restartMpvEmbed(bounds);
-    if (!restarted) {
-      throw new Error(mpvWorker.getLoadError() ?? 'Failed to restart MPV embed');
-    }
-  } else if (mpvUnavailable()) {
+  if (mpvUnavailable()) {
     throw new Error(mpvWorker.getLoadError() ?? 'MPV is not available');
   }
 
@@ -237,7 +259,8 @@ ipcMain.handle('mpv:diagnostics', async () => {
   if (mpvUnavailable()) return null;
   const diag = await mpvWorker.request('getDiagnostics');
   return {
-    electronHwnd: getVideoWindowId(),
+    surfaceHwnd: getVideoWindowId(),
+    embedMode: usesNativeWin32Surface() ? 'worker-hwnd' : 'electron-hwnd',
     ...(diag as Record<string, unknown>),
   };
 });
@@ -362,7 +385,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   isShuttingDown = true;
   mpvWorker.stop();
-  destroyVideoWindow();
+  void destroyVideoWindow();
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -371,7 +394,7 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   isShuttingDown = true;
   mpvWorker.stop();
-  destroyVideoWindow();
+  void destroyVideoWindow();
 });
 
 process.on('uncaughtException', (error: NodeJS.ErrnoException) => {

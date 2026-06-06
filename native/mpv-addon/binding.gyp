@@ -35,7 +35,13 @@
     },
     {
       "target_name": "mpv_addon",
-      "sources": ["src/mpv_player.cpp"],
+      "conditions": [
+        ["OS=='win'", {
+          "sources": ["src/mpv_player.cpp", "src/win32_surface.cpp"]
+        }, {
+          "sources": ["src/mpv_player.cpp"]
+        }]
+      ],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")"
       ],
