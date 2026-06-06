@@ -2,12 +2,13 @@
   "targets": [
     {
       "target_name": "mpv_electron_shim",
-      "type": "shared_library",
-      "sources": ["src/mpv_shim.cpp"],
+      "type": "none",
       "conditions": [
         [
           "OS=='linux'",
           {
+            "type": "shared_library",
+            "sources": ["src/mpv_shim.cpp"],
             "libraries": ["-Wl,--no-as-needed", "-lvulkan", "<!@(pkg-config --libs mpv)"]
           }
         ]
@@ -15,17 +16,25 @@
     },
     {
       "target_name": "vulkan_preload",
-      "sources": ["src/vulkan_preload.cpp"],
-      "include_dirs": [
-        "<!@(node -p \"require('node-addon-api').include\")"
-      ],
-      "cflags!": ["-fno-exceptions"],
-      "cflags_cc!": ["-fno-exceptions"],
-      "defines": ["NAPI_DISABLE_CPP_EXCEPTIONS"]
+      "type": "none",
+      "conditions": [
+        [
+          "OS=='linux'",
+          {
+            "type": "loadable_module",
+            "sources": ["src/vulkan_preload.cpp"],
+            "include_dirs": [
+              "<!@(node -p \"require('node-addon-api').include\")"
+            ],
+            "cflags!": ["-fno-exceptions"],
+            "cflags_cc!": ["-fno-exceptions"],
+            "defines": ["NAPI_DISABLE_CPP_EXCEPTIONS"]
+          }
+        ]
+      ]
     },
     {
       "target_name": "mpv_addon",
-      "dependencies": ["mpv_electron_shim"],
       "sources": ["src/mpv_player.cpp"],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")"
@@ -37,6 +46,7 @@
         [
           "OS=='linux'",
           {
+            "dependencies": ["mpv_electron_shim"],
             "libraries": [
               "-Wl,-rpath,$ORIGIN",
               '<(PRODUCT_DIR)/mpv_electron_shim.so'

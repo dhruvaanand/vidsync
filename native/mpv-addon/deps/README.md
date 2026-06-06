@@ -6,11 +6,14 @@ via `pkg-config`. On Windows, place MPV development files here before running
 
 ## Required layout
 
+Headers must match `#include <mpv/client.h>`:
+
 ```
 deps/
 ├── include/
-│   ├── client.h
-│   └── render.h
+│   └── mpv/
+│       ├── client.h
+│       └── render.h
 └── lib/
     └── mpv.lib
 ```
@@ -27,7 +30,8 @@ Copy into this folder from PowerShell (adjust `C:\msys64` if needed):
 
 ```powershell
 $msys = "C:\msys64\ucrt64"
-Copy-Item "$msys\include\mpv\*.h" native\mpv-addon\deps\include\
+New-Item -ItemType Directory -Force native\mpv-addon\deps\include\mpv, native\mpv-addon\deps\lib
+Copy-Item "$msys\include\mpv\*.h" native\mpv-addon\deps\include\mpv\
 Copy-Item "$msys\lib\libmpv.dll.a" native\mpv-addon\deps\lib\mpv.lib
 ```
 

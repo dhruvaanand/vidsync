@@ -35,13 +35,25 @@ Guests must have access to the **same file path** as the host (shared drive, ide
 | **Node.js 20+** | [nodejs.org](https://nodejs.org/) (LTS) |
 | **Git** | [git-scm.com](https://git-scm.com/) |
 | **Visual Studio Build Tools** | [Build Tools for Visual Studio](https://visualstudio.microsoft.com/visual-cpp-build-tools/) — select **Desktop development with C++** |
+| **Python 3.11+** | [python.org](https://www.python.org/downloads/) — check **“Add python.exe to PATH”** during install (`node-gyp` requires it) |
 
 Verify in PowerShell:
 
 ```powershell
 node -v
 npm -v
+python --version
 ```
+
+If `python` opens the Microsoft Store or says “not found”, install Python from python.org (not the Store stub). Optionally disable the Store alias: **Settings → Apps → Advanced app settings → App execution aliases** → turn off `python.exe` / `python3.exe`.
+
+Point npm at your Python install if needed:
+
+```powershell
+npm config set python "C:\Users\dhruv\AppData\Local\Programs\Python\Python312\python.exe"
+```
+
+Use Node.js **20 LTS** if you hit other toolchain issues (you have Node 24, which is very new).
 
 ### 2. Set up libmpv dev files
 
@@ -50,8 +62,9 @@ Windows does not use `pkg-config`. Place MPV headers and an import library here 
 ```
 native/mpv-addon/deps/
 ├── include/
-│   ├── client.h
-│   └── render.h
+│   └── mpv/
+│       ├── client.h
+│       └── render.h
 └── lib/
     └── mpv.lib
 ```
@@ -70,8 +83,8 @@ native/mpv-addon/deps/
    ```powershell
    # From PowerShell in the vidsync repo root
    $msys = "C:\msys64\ucrt64"
-   New-Item -ItemType Directory -Force native\mpv-addon\deps\include, native\mpv-addon\deps\lib
-   Copy-Item "$msys\include\mpv\*.h" native\mpv-addon\deps\include\
+   New-Item -ItemType Directory -Force native\mpv-addon\deps\include\mpv, native\mpv-addon\deps\lib
+   Copy-Item "$msys\include\mpv\*.h" native\mpv-addon\deps\include\mpv\
    Copy-Item "$msys\lib\libmpv.dll.a" native\mpv-addon\deps\lib\mpv.lib
    ```
 
@@ -145,7 +158,12 @@ Connect both clients to `http://localhost:3056`, join the same room. The guest m
 
 | Problem | Fix |
 |---------|-----|
-| `client.h` not found during build | Fill in `native/mpv-addon/deps/include/` |
+| `Could not find Visual Studio` / `unknown version "undefined"` at `...\18\BuildTools` | **VS 2025/2026 (v18) is too new for node-gyp.** Install [VS 2022 Build Tools](https://aka.ms/vs/17/release/vs_BuildTools.exe) with **Desktop development with C++**, then `npm config set msvs_version 2022` and rebuild from **x64 Native Tools Command Prompt for VS 2022** |
+| `Could not find any Python installation` / `Python was not found` | Install Python 3.11+ from python.org with **Add to PATH**, then `npm config set python "C:\...\python.exe"` |
+| `'true' is not recognized` | Fixed in `package.json` — pull latest, or ignore (harmless after native build is fixed) |
+| `postinstall` succeeded but no `mpv_addon.node` | Run `npm run build:native` manually and read the full error |
+| `mpv/client.h` not found during build | Copy headers to `native/mpv-addon/deps/include/mpv/` (see MSYS2 steps above) |
+| `dlfcn.h` not found | Pull latest repo — Linux-only targets are now skipped on Windows |
 | Link error for `mpv.lib` | Put the import lib in `native/mpv-addon/deps/lib/` |
 | App opens but no video | Copy `libmpv-2.dll` into `native/mpv-addon/build/Release/` |
 | MPV worker failed to start | Run `where node` — if missing, install Node or set `VIDSYNC_NODE_PATH` |

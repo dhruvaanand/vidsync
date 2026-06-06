@@ -3,7 +3,9 @@
 #include <mpv/client.h>
 #include <mpv/render.h>
 
+#if defined(__linux__)
 #include <dlfcn.h>
+#endif
 #include <atomic>
 #include <cstdlib>
 #include <cstring>
@@ -470,7 +472,9 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
 };
 
 Napi::Object InitAll(Napi::Env env, Napi::Object exports) {
+#if defined(__linux__)
   dlopen("libvulkan.so.1", RTLD_NOW | RTLD_GLOBAL);
+#endif
   return MpvPlayer::Init(env, exports);
 }
 
