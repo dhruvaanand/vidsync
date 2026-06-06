@@ -18,43 +18,171 @@ Vidsync lets a host open a local video file (MKV, MP4, etc.), control playback, 
 | Platform | Video rendering | Notes |
 |----------|-----------------|-------|
 | **Windows** | Native embed (`wid`) | Recommended — full speed, child HWND over the video panel |
+| **macOS** | Native embed | Same approach as Windows; less battle-tested |
 | **Linux (X11)** | Native embed | Generally works |
 | **Linux (Wayland / Hyprland)** | Native embed | Window positioning can be unreliable |
-| **macOS** | Native embed | Experimental |
 
 Guests must have access to the **same file path** as the host (shared drive, identical path, or copy).
 
-## Prerequisites
+---
 
-- **Node.js** 20+
-- **libmpv** development libraries
-- **Build tools** for the native addon (`python`, `make`, `g++` / MSVC)
+## Getting started on Windows
 
-### Linux (Debian/Ubuntu)
+### 1. Install prerequisites
 
-```bash
-sudo apt install libmpv-dev pkg-config build-essential
+| Tool | Install |
+|------|---------|
+| **Node.js 20+** | [nodejs.org](https://nodejs.org/) (LTS) |
+| **Git** | [git-scm.com](https://git-scm.com/) |
+| **Visual Studio Build Tools** | [Build Tools for Visual Studio](https://visualstudio.microsoft.com/visual-cpp-build-tools/) — select **Desktop development with C++** |
+
+Verify in PowerShell:
+
+```powershell
+node -v
+npm -v
 ```
 
-### Linux (Arch)
+### 2. Set up libmpv dev files
 
-```bash
-sudo pacman -S mpv pkgconf base-devel
+Windows does not use `pkg-config`. Place MPV headers and an import library here before building:
+
+```
+native/mpv-addon/deps/
+├── include/
+│   ├── client.h
+│   └── render.h
+└── lib/
+    └── mpv.lib
 ```
 
-### Windows
+**Option A — MSYS2 (recommended)**
 
-- [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) (Desktop development with C++)
-- libmpv headers and import library — see [`native/mpv-addon/deps/README.md`](native/mpv-addon/deps/README.md)
-- MPV runtime on `PATH` (or next to the built addon)
+1. Install [MSYS2](https://www.msys2.org/)
+2. In the **UCRT64** terminal:
 
-### macOS
+   ```bash
+   pacman -S mingw-w64-ucrt-x86_64-mpv
+   ```
+
+3. Copy files into the repo (adjust the MSYS2 install path if needed):
+
+   ```powershell
+   # From PowerShell in the vidsync repo root
+   $msys = "C:\msys64\ucrt64"
+   New-Item -ItemType Directory -Force native\mpv-addon\deps\include, native\mpv-addon\deps\lib
+   Copy-Item "$msys\include\mpv\*.h" native\mpv-addon\deps\include\
+   Copy-Item "$msys\lib\libmpv.dll.a" native\mpv-addon\deps\lib\mpv.lib
+   ```
+
+See [`native/mpv-addon/deps/README.md`](native/mpv-addon/deps/README.md) for details.
+
+### 3. Clone and install dependencies
+
+```powershell
+git clone https://github.com/YOUR_USER/vidsync.git
+cd vidsync
+
+npm install
+cd server
+npm install
+cd ..
+```
+
+### 4. Build the native addon
+
+Run from **PowerShell** or **x64 Native Tools Command Prompt for VS**:
+
+```powershell
+npm run build:native
+```
+
+Confirm the addon was built:
+
+```powershell
+dir native\mpv-addon\build\Release\mpv_addon.node
+```
+
+Copy the MPV runtime DLL next to the addon (required at runtime):
+
+```powershell
+copy C:\msys64\ucrt64\bin\libmpv-2.dll native\mpv-addon\build\Release\
+```
+
+### 5. Run Vidsync
+
+Open **two terminals** in the project folder.
+
+**Terminal 1 — sync server**
+
+```powershell
+npm run server
+```
+
+Wait for: `Vidsync sync server listening on http://localhost:3056`
+
+**Terminal 2 — app**
+
+```powershell
+npm start
+```
+
+The Vidsync window should open. Video plays in the black panel with native full-speed playback.
+
+### 6. Test host + guest on one PC
+
+```powershell
+# Terminal 2 — first window (already running after npm start)
+npm start
+
+# Terminal 3 — second window (after the first is fully open)
+npm run start:client
+```
+
+Connect both clients to `http://localhost:3056`, join the same room. The guest must open the **same file path** as the host (e.g. `D:\Movies\film.mkv`).
+
+### Windows troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `client.h` not found during build | Fill in `native/mpv-addon/deps/include/` |
+| Link error for `mpv.lib` | Put the import lib in `native/mpv-addon/deps/lib/` |
+| App opens but no video | Copy `libmpv-2.dll` into `native/mpv-addon/build/Release/` |
+| MPV worker failed to start | Run `where node` — if missing, install Node or set `VIDSYNC_NODE_PATH` |
+
+```powershell
+$env:VIDSYNC_NODE_PATH = "C:\Program Files\nodejs\node.exe"
+npm start
+```
+
+---
+
+## Getting started on macOS
+
+### 1. Install prerequisites
+
+| Tool | Install |
+|------|---------|
+| **Node.js 20+** | [nodejs.org](https://nodejs.org/) or `brew install node` |
+| **Homebrew** | [brew.sh](https://brew.sh/) |
+| **Xcode Command Line Tools** | `xcode-select --install` |
+
+Install libmpv and build tooling:
 
 ```bash
 brew install mpv pkg-config
+xcode-select --install   # skip if already installed
 ```
 
-## Quick start
+Verify:
+
+```bash
+node -v
+npm -v
+pkg-config --modversion mpv
+```
+
+### 2. Clone and install dependencies
 
 ```bash
 git clone https://github.com/YOUR_USER/vidsync.git
@@ -62,25 +190,100 @@ cd vidsync
 
 npm install
 cd server && npm install && cd ..
+```
 
-# Terminal 1 — sync server (default http://localhost:3056)
+`npm install` runs `build:native` automatically. If it fails, build manually:
+
+```bash
+npm run build:native
+```
+
+Confirm the addon exists:
+
+```bash
+ls native/mpv-addon/build/Release/mpv_addon.node
+```
+
+Homebrew's `mpv` dylib is usually found automatically via `pkg-config`. If the app reports MPV unavailable at runtime, ensure `brew` is on your `PATH` and `mpv` is installed for your architecture (Apple Silicon vs Intel).
+
+### 3. Run Vidsync
+
+Open **two terminals** in the project folder.
+
+**Terminal 1 — sync server**
+
+```bash
 npm run server
+```
 
-# Terminal 2 — Electron app
+Wait for: `Vidsync sync server listening on http://localhost:3056`
+
+**Terminal 2 — app**
+
+```bash
 npm start
 ```
 
-### Testing with two clients locally
-
-Only one `npm start` can own the webpack dev server (port 3000).
+### 4. Test host + guest on one Mac
 
 ```bash
 # Terminal 2 — first window
 npm start
 
-# Terminal 3 — second window (after the first is up)
+# Terminal 3 — second window (after the first is fully open)
 npm run start:client
 ```
+
+### macOS troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `pkg-config: mpv not found` | `brew install mpv pkg-config` |
+| Native build fails | `xcode-select --install`, then `npm run rebuild:native` |
+| Video panel misaligned on Retina | Resize the window once; bounds should resync |
+| MPV worker failed to start | `which node` — or set `VIDSYNC_NODE_PATH` |
+
+```bash
+export VIDSYNC_NODE_PATH="$(which node)"
+npm start
+```
+
+---
+
+## Getting started on Linux
+
+### Prerequisites
+
+**Debian / Ubuntu**
+
+```bash
+sudo apt install libmpv-dev pkg-config build-essential
+```
+
+**Arch**
+
+```bash
+sudo pacman -S mpv pkgconf base-devel
+```
+
+### Run
+
+```bash
+git clone https://github.com/YOUR_USER/vidsync.git
+cd vidsync
+npm install
+cd server && npm install && cd ..
+
+# Terminal 1
+npm run server
+
+# Terminal 2
+npm start
+```
+
+On Wayland compositors (e.g. Hyprland), native video window positioning may be unreliable.
+
+---
 
 ## Usage
 
@@ -91,6 +294,8 @@ npm run start:client
 5. Host clicks **Open Video** and controls playback.
 6. Guests open the same file when prompted; playback follows the host.
 7. Chat in the sidebar.
+
+---
 
 ## Architecture
 
@@ -110,7 +315,7 @@ vidsync/
 
 1. Renderer measures the `.video-host` panel and sends bounds to the main process.
 2. Main process positions a frameless child `BrowserWindow` over that region.
-3. The child window's native handle (`wid` / HWND) is passed to libmpv.
+3. The child window's native handle (`wid` / HWND / NSView) is passed to libmpv.
 4. MPV renders directly into the child window — no per-frame pixel copies.
 
 **Sync path**
@@ -136,16 +341,8 @@ vidsync/
 |----------|---------|-------------|
 | `PORT` | `3056` | Sync server port |
 | `VIDSYNC_DEV_PORT` | `3000` | Webpack dev server port |
-| `VIDSYNC_NODE_PATH` | `which node` | Node binary for the MPV worker |
+| `VIDSYNC_NODE_PATH` | auto-detected | Node binary for the MPV worker (`where node` on Windows, `which node` elsewhere) |
 | `VIDSYNC_CLIENT_ID` | timestamp | Profile id for `start:client` |
-
-## Building the native addon
-
-```bash
-npm run build:native
-```
-
-If MPV headers are not found on Windows, configure paths under `native/mpv-addon/deps/`.
 
 ## Packaging
 

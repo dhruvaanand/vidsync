@@ -1,7 +1,10 @@
 # Windows libmpv dependencies
 
 The native addon links against libmpv. On Linux and macOS, headers are resolved
-via `pkg-config`. On Windows, place MPV development files here before building:
+via `pkg-config`. On Windows, place MPV development files here before running
+`npm run build:native`.
+
+## Required layout
 
 ```
 deps/
@@ -9,8 +12,32 @@ deps/
 │   ├── client.h
 │   └── render.h
 └── lib/
-    └── mpv.lib   (or mpv.dll + import lib from your MPV build)
+    └── mpv.lib
 ```
 
-Then update `binding.gyp` Windows `libraries` / `include_dirs` if your layout
-differs. A prebuilt MPV dev package or a local MSYS2/mpv build usually works.
+## MSYS2 (recommended)
+
+In the **UCRT64** terminal:
+
+```bash
+pacman -S mingw-w64-ucrt-x86_64-mpv
+```
+
+Copy into this folder from PowerShell (adjust `C:\msys64` if needed):
+
+```powershell
+$msys = "C:\msys64\ucrt64"
+Copy-Item "$msys\include\mpv\*.h" native\mpv-addon\deps\include\
+Copy-Item "$msys\lib\libmpv.dll.a" native\mpv-addon\deps\lib\mpv.lib
+```
+
+After building the addon, copy the runtime DLL:
+
+```powershell
+copy C:\msys64\ucrt64\bin\libmpv-2.dll native\mpv-addon\build\Release\
+```
+
+## Custom layout
+
+If your MPV SDK uses different paths, update the `OS=='win'` section in
+[`binding.gyp`](../binding.gyp) (`include_dirs`, `library_dirs`, `libraries`).
