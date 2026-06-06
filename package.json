@@ -4,7 +4,7 @@
   "description": "Cross-platform desktop watch party app with MPV and Socket.io sync",
   "main": ".webpack/main/index.js",
   "scripts": {
-    "start": "electron-forge start",
+    "start": "node scripts/ensure-native-for-worker.js && electron-forge start",
     "start:client": "node scripts/launch-client.js",
     "package": "electron-forge package",
     "make": "electron-forge make",
@@ -14,7 +14,6 @@
     "diagnose:mpv": "scripts\\diagnose-mpv-windows.cmd",
     "diagnose:playback": "node scripts/diagnose-playback.js",
     "rebuild:native": "cd native/mpv-addon && npx node-gyp rebuild",
-    "rebuild:electron": "npx @electron/rebuild -f -m native/mpv-addon",
     "postinstall": "npm run build:native || exit 0",
     "server": "cd server && npm run dev",
     "server:build": "cd server && npm run build && npm start"
@@ -28,7 +27,6 @@
   "license": "MIT",
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
-    "mpv-addon": "file:native/mpv-addon",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "socket.io-client": "^4.8.1"

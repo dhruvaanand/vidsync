@@ -17,7 +17,11 @@ const config: ForgeConfig = {
       './native/mpv-worker',
     ],
   },
-  rebuildConfig: {},
+  // mpv_addon.node is loaded by the forked worker using system Node, not Electron.
+  // Do not let Forge/@electron/rebuild replace it with an Electron ABI build.
+  rebuildConfig: {
+    onlyModules: [],
+  },
   makers: [
     new MakerSquirrel({}),
     new MakerZIP({}, ['darwin']),

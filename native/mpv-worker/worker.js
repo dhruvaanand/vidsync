@@ -24,11 +24,21 @@ try {
     ({ createSurface, moveSurface, showSurface, destroySurface, getSurfaceHwnd } = addon);
   }
 } catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
   console.error(`Failed to load mpv_addon.node from ${releaseDir}`);
-  console.error(error instanceof Error ? error.message : error);
-  console.error(
-    'On Windows: run npm run build:native and ensure libmpv-2.dll is in the Release folder.',
-  );
+  console.error(message);
+  if (message.includes('did not self-register')) {
+    console.error(
+      'ABI mismatch: mpv_addon.node was built for a different Node than the MPV worker uses.',
+    );
+    console.error(
+      'Fix: npm run rebuild:native   (builds for system Node — do NOT use @electron/rebuild on mpv-addon)',
+    );
+  } else {
+    console.error(
+      'On Windows: run npm run build:native and ensure libmpv-2.dll is in the Release folder.',
+    );
+  }
   process.exit(1);
 }
 

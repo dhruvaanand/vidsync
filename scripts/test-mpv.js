@@ -161,6 +161,13 @@ function request(method, ...args) {
           'This copies libmpv-2.dll + dependency DLLs into native/mpv-addon/build/Release/',
       );
     }
+    if (message.includes('did not self-register')) {
+      fail(
+        `${message}\n` +
+          'ABI mismatch: run npm run rebuild:native (system Node).\n' +
+          'Do not rebuild mpv-addon with @electron/rebuild — the MPV worker uses system Node.',
+      );
+    }
     fail(message);
   }
 })();

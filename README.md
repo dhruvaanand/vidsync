@@ -169,6 +169,7 @@ Connect both clients to `http://localhost:3056`, join the same room. The guest m
 | Link error for `mpv.lib` | Put the import lib in `native/mpv-addon/deps/lib/` |
 | App opens but no video | Copy `libmpv-2.dll` into `native/mpv-addon/build/Release/` |
 | `The specified module could not be found` loading `mpv_addon.node` | Run `npm run build:native` again — it copies `libmpv-2.dll` **and** ffmpeg deps via MSYS2 `ldd`. Need MSYS2 mpv: `pacman -S mingw-w64-ucrt-x86_64-mpv`. Test: `npm run test:mpv` |
+| `Module did not self-register` in `[mpv-worker]` | Electron rebuilt the addon for its own Node ABI. Run `npm run rebuild:native` (system Node). `npm start` now auto-fixes this; do **not** run `@electron/rebuild` on `mpv-addon` |
 | MPV worker failed to start | Run `where node` — if missing, install Node or set `VIDSYNC_NODE_PATH` |
 
 ```powershell
