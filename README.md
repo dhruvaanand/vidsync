@@ -116,10 +116,12 @@ Confirm the addon was built:
 dir native\mpv-addon\build\Release\mpv_addon.node
 ```
 
-Copy the MPV runtime DLL next to the addon (required at runtime):
+`npm run build:native` copies `libmpv-2.dll` and its ffmpeg dependency DLLs into `Release\` automatically. If video still fails:
 
 ```powershell
-copy C:\msys64\ucrt64\bin\libmpv-2.dll native\mpv-addon\build\Release\
+npm run build:native
+dir native\mpv-addon\build\Release\*.dll
+npm run test:mpv
 ```
 
 ### 5. Run Vidsync
@@ -166,7 +168,7 @@ Connect both clients to `http://localhost:3056`, join the same room. The guest m
 | `dlfcn.h` not found | Pull latest repo — Linux-only targets are now skipped on Windows |
 | Link error for `mpv.lib` | Put the import lib in `native/mpv-addon/deps/lib/` |
 | App opens but no video | Copy `libmpv-2.dll` into `native/mpv-addon/build/Release/` |
-| `The specified module could not be found` loading `mpv_addon.node` | `libmpv-2.dll` needs MSYS2/ffmpeg DLLs — install MSYS2 mpv; Vidsync adds `C:\msys64\ucrt64\bin` to the worker PATH automatically. Test with `npm run test:mpv` |
+| `The specified module could not be found` loading `mpv_addon.node` | Run `npm run build:native` again — it copies `libmpv-2.dll` **and** ffmpeg deps via MSYS2 `ldd`. Need MSYS2 mpv: `pacman -S mingw-w64-ucrt-x86_64-mpv`. Test: `npm run test:mpv` |
 | MPV worker failed to start | Run `where node` — if missing, install Node or set `VIDSYNC_NODE_PATH` |
 
 ```powershell

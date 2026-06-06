@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
- * Smoke-test the native MPV addon + worker on Windows/macOS/Linux.
+ * Smoke-test the native MPV worker (same path Vidsync uses at runtime).
  *
  * Usage (from repo root):
- *   node scripts/test-mpv.js
- *   node scripts/test-mpv.js "D:\Movies\film.mkv"
+ *   npm run test:mpv
+ *   npm run test:mpv -- "D:\Movies\film.mkv"
  */
 const { fork } = require('child_process');
 const fs = require('fs');
@@ -37,22 +37,37 @@ if (process.platform === 'win32') {
   if (!fs.existsSync(dllPath)) {
     fail(
       `libmpv-2.dll not found at ${dllPath}\n` +
-        'Copy it: copy C:\\msys64\\ucrt64\\bin\\libmpv-2.dll native\\mpv-addon\\build\\Release\\',
+        'Run: npm run build:native',
     );
   }
   ok(`libmpv-2.dll found (${dllPath})`);
+
+  const runtimeDllCount = fs
+    .readdirSync(releaseDir)
+    .filter((name) => name.toLowerCase().endsWith('.dll')).length;
+  console.log(`runtime DLLs in Release: ${runtimeDllCount}`);
+  if (runtimeDllCount < 5) {
+    console.warn(
+      'Warning: few DLLs in Release — run: npm run build:native\n' +
+        '  (copies libmpv + ffmpeg deps via MSYS2 ldd)',
+    );
+  }
+
+  const msysBins = getMsysBinCandidates();
+  if (msysBins.length > 0) {
+    ok(`MSYS2 bin available (${msysBins[0]})`);
+  }
 }
 
-try {
-  const { MpvPlayer } = require(addonPath);
-  const player = new MpvPlayer(0);
-  player.destroy();
-  ok(`addon loads from ${addonPath}`);
-} catch (error) {
-  fail(
-    `addon failed to load: ${error instanceof Error ? error.message : error}\n` +
-      'On Windows: libmpv-2.dll needs MSYS2 DLLs. Add C:\\msys64\\ucrt64\\bin to PATH.',
-  );
+let env = prependWindowsMpvPath({
+  ...process.env,
+  VIDSYNC_ADDON_ROOT: releaseDir,
+});
+
+if (process.platform === 'win32') {
+  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'Path';
+  const existing = env[pathKey] ?? '';
+  env[pathKey] = existing ? `${releaseDir};${existing}` : releaseDir;
 }
 
 const child = fork(workerPath, [], {
@@ -78,7 +93,11 @@ child.on('message', (msg) => {
 
 child.on('exit', (code) => {
   if (code !== 0 && code !== null) {
-    fail(`worker exited with code ${code}`);
+    fail(
+      `worker exited with code ${code}\n` +
+        'Run: npm run build:native\n' +
+        'Ensure MSYS2 ucrt64 mpv is installed (pacman -S mingw-w64-ucrt-x86_64-mpv)',
+    );
   }
 });
 
@@ -98,7 +117,7 @@ function request(method, ...args) {
 (async () => {
   try {
     await request('init', 0);
-    ok('worker init');
+    ok('worker init (addon loaded inside worker)');
 
     if (testFile) {
       if (!fs.existsSync(testFile)) {
@@ -127,13 +146,21 @@ function request(method, ...args) {
       ok('video load');
     } else {
       console.log('Tip: pass a video path to test playback:');
-      console.log('  node scripts/test-mpv.js "D:\\Movies\\film.mkv"');
+      console.log('  npm run test:mpv -- "D:\\Movies\\film.mkv"');
     }
 
     await request('destroy');
     child.disconnect();
     ok('MPV is working on this machine');
   } catch (error) {
-    fail(error instanceof Error ? error.message : String(error));
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('specified module could not be found')) {
+      fail(
+        `${message}\n` +
+          'Run: npm run build:native\n' +
+          'This copies libmpv-2.dll + dependency DLLs into native/mpv-addon/build/Release/',
+      );
+    }
+    fail(message);
   }
 })();
