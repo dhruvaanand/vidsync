@@ -27,7 +27,12 @@ function rebuildNative(reason) {
 
 function tryLoadAddon() {
   // eslint-disable-next-line import/no-dynamic-require, global-require
-  require(addonPath);
+  const addon = require(addonPath);
+  if (!addon.MpvPlayer) {
+    throw new Error(
+      'mpv_addon.node loaded but MpvPlayer is missing — native build compiled no addon sources',
+    );
+  }
 }
 
 if (!fs.existsSync(addonPath)) {

@@ -35,13 +35,7 @@
     },
     {
       "target_name": "mpv_addon",
-      "conditions": [
-        ["OS=='win'", {
-          "sources": ["src/mpv_player.cpp", "src/win32_surface.cpp"]
-        }, {
-          "sources": ["src/mpv_player.cpp"]
-        }]
-      ],
+      "sources": ["src/mpv_player.cpp"],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")"
       ],
@@ -49,6 +43,15 @@
       "cflags_cc!": ["-fno-exceptions"],
       "defines": ["NAPI_DISABLE_CPP_EXCEPTIONS"],
       "conditions": [
+        [
+          "OS=='win'",
+          {
+            "sources+": ["src/win32_surface.cpp"],
+            "include_dirs": ["<(module_root_dir)/deps/include"],
+            "library_dirs": ["<(module_root_dir)/deps/lib"],
+            "libraries": ["mpv.lib"]
+          }
+        ],
         [
           "OS=='linux'",
           {
@@ -65,14 +68,6 @@
           {
             "libraries": ["<!@(pkg-config --libs mpv 2>/dev/null || echo -lmpv)"],
             "cflags": ["<!@(pkg-config --cflags mpv 2>/dev/null)"]
-          }
-        ],
-        [
-          "OS=='win'",
-          {
-            "include_dirs": ["<(module_root_dir)/deps/include"],
-            "library_dirs": ["<(module_root_dir)/deps/lib"],
-            "libraries": ["mpv.lib"]
           }
         ]
       ]

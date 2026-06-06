@@ -32,6 +32,21 @@ if (!fs.existsSync(addonPath)) {
   fail(`mpv_addon.node not found at ${addonPath}\nRun: npm run build:native`);
 }
 
+try {
+  const addon = require(addonPath);
+  if (!addon.MpvPlayer) {
+    fail(
+      'mpv_addon.node exists but MpvPlayer export is missing.\n' +
+        'The native build is broken (binding.gyp compiled no sources). Run: npm run rebuild:native',
+    );
+  }
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (!message.includes('did not self-register') && !message.includes('NODE_MODULE_VERSION')) {
+    fail(`Cannot load mpv_addon.node: ${message}`);
+  }
+}
+
 if (process.platform === 'win32') {
   const dllPath = path.join(releaseDir, 'libmpv-2.dll');
   if (!fs.existsSync(dllPath)) {
