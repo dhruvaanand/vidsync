@@ -195,8 +195,10 @@ export default function App() {
           onJoinRoom={() => sync.joinRoom(roomInput, false)}
           onLeaveRoom={sync.leaveRoom}
           onOpenFile={handleOpenFile}
-          loadedFile={mpv.loadedFile}
+          loadedFile={mpv.loadedFile ?? mpv.pendingFile}
+          isLoadingVideo={mpv.pendingFile !== null}
           hostVideoPath={sync.hostVideoPath}
+          videoError={mpv.error}
         />
 
         <VideoPlayer
@@ -206,7 +208,7 @@ export default function App() {
           paused={displayPaused}
           isHost={sync.isRoomHost || !sync.connected}
           error={mpv.error ?? guestVideoHint}
-          loaded={mpv.loadedFile !== null}
+          loaded={mpv.loadedFile !== null || mpv.pendingFile !== null}
           audioTracks={mpv.audioTracks.map((track) => ({
             id: track.id,
             label: mpv.formatTrackLabel(track),

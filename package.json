@@ -9,6 +9,7 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "build:native": "cd native/mpv-addon && npm install && npx node-gyp rebuild && node ../../scripts/copy-mpv-dll.js",
+    "test:mpv": "node scripts/test-mpv.js",
     "rebuild:native": "cd native/mpv-addon && npx node-gyp rebuild",
     "rebuild:electron": "npx @electron/rebuild -f -m native/mpv-addon",
     "postinstall": "npm run build:native || exit 0",

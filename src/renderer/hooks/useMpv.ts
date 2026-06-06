@@ -3,6 +3,40 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const POLL_MS = 250;
 const TRACK_REFRESH_MS = 2000;
+const LOAD_TIMEOUT_MS = 30000;
+
+async function waitForVideoReady(timeoutMs = LOAD_TIMEOUT_MS): Promise<boolean> {
+  if (!window.vidsync) return false;
+
+  if (window.vidsync.mpvWaitForLoad) {
+    try {
+      return await window.vidsync.mpvWaitForLoad(timeoutMs);
+    } catch {
+      // Fall through to polling when the native addon is out of date.
+    }
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const [duration, mpvError] = await Promise.all([
+      window.vidsync.mpvGetDuration(),
+      window.vidsync.mpvGetLastError?.() ?? Promise.resolve(null),
+    ]);
+
+    if (mpvError) {
+      throw new Error(mpvError);
+    }
+    if (duration > 0) {
+      return true;
+    }
+
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 200);
+    });
+  }
+
+  return false;
+}
 
 function formatTrackLabel(track: MpvTrack) {
   const parts = [track.title, track.lang].filter(Boolean);
@@ -30,6 +64,7 @@ export function useMpv(videoHostRef: React.RefObject<HTMLDivElement | null>) {
   const [duration, setDuration] = useState(0);
   const [paused, setPaused] = useState(true);
   const [loadedFile, setLoadedFile] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tracks, setTracks] = useState<MpvTrack[]>([]);
   const [activeSid, setActiveSid] = useState<number | null>(null);
@@ -44,7 +79,10 @@ export function useMpv(videoHostRef: React.RefObject<HTMLDivElement | null>) {
       const ok = await window.vidsync.mpvAvailable(bounds);
       attachedRef.current = ok;
       if (!ok) {
-        setError('Failed to attach native MPV video window — restart the app (Ctrl+C, npm start)');
+        const detail = (await window.vidsync.mpvLoadError?.()) ?? 'unknown error';
+        setError(`Failed to attach native MPV video window: ${detail}`);
+      } else {
+        setError(null);
       }
       return;
     }
@@ -109,11 +147,14 @@ export function useMpv(videoHostRef: React.RefObject<HTMLDivElement | null>) {
         if (cancelled) return;
 
         if (!available) {
+          attachedRef.current = false;
           const detail = (await window.vidsync.mpvLoadError?.()) ?? 'unknown error';
           setError(`MPV unavailable: ${detail}`);
           return;
         }
 
+        attachedRef.current = true;
+        setError(null);
         pollPlayback();
       } catch (err) {
         if (!cancelled) {
@@ -174,33 +215,46 @@ export function useMpv(videoHostRef: React.RefObject<HTMLDivElement | null>) {
 
   const loadFile = useCallback(async (filePath: string) => {
     if (!window.vidsync) return false;
+
+    setPendingFile(filePath);
+    setError(null);
+
     try {
       await syncVideoHost();
 
-      if (!attachedRef.current) {
+      const available = await window.vidsync.mpvAvailable();
+      if (!available) {
+        attachedRef.current = false;
         const detail = (await window.vidsync.mpvLoadError?.()) ?? 'native MPV failed to start';
         throw new Error(
-          `${detail}. Rebuild the addon (npm run build:native) and copy libmpv-2.dll into native/mpv-addon/build/Release/.`,
+          `${detail}. Run npm run build:native and copy libmpv-2.dll into native/mpv-addon/build/Release/.`,
         );
       }
 
+      attachedRef.current = true;
       await window.vidsync.mpvLoad(filePath);
-
-      const ready = await window.vidsync.mpvWaitForLoad?.(30000);
-      if (!ready) {
-        const mpvError = await window.vidsync.mpvGetLastError?.();
-        throw new Error(
-          mpvError ??
-            'Video did not load. On Windows, copy libmpv-2.dll next to mpv_addon.node in native/mpv-addon/build/Release/.',
-        );
-      }
 
       loadedFileRef.current = filePath;
       setLoadedFile(filePath);
+      setPendingFile(null);
+
+      const ready = await waitForVideoReady(LOAD_TIMEOUT_MS);
+      if (!ready) {
+        const mpvError = await window.vidsync.mpvGetLastError?.();
+        setError(
+          mpvError ??
+            'Video did not start playing. On Windows, ensure libmpv-2.dll is next to mpv_addon.node in native/mpv-addon/build/Release/.',
+        );
+        return false;
+      }
+
       setError(null);
       void refreshTracks();
       return true;
     } catch (err) {
+      setPendingFile(null);
+      loadedFileRef.current = filePath;
+      setLoadedFile(filePath);
       setError(err instanceof Error ? err.message : 'Failed to load file');
       return false;
     }
@@ -274,6 +328,7 @@ export function useMpv(videoHostRef: React.RefObject<HTMLDivElement | null>) {
     duration,
     paused,
     loadedFile,
+    pendingFile,
     error,
     tracks,
     audioTracks,

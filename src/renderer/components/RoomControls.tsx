@@ -17,7 +17,9 @@ interface RoomControlsProps {
   onLeaveRoom: () => void;
   onOpenFile: () => void;
   loadedFile: string | null;
+  isLoadingVideo?: boolean;
   hostVideoPath?: string | null;
+  videoError?: string | null;
 }
 
 export default function RoomControls({
@@ -37,7 +39,9 @@ export default function RoomControls({
   onLeaveRoom,
   onOpenFile,
   loadedFile,
+  isLoadingVideo = false,
   hostVideoPath,
+  videoError,
 }: RoomControlsProps) {
   const handleServerSubmit = (event: FormEvent) => {
     event.preventDefault();
@@ -110,6 +114,7 @@ export default function RoomControls({
         {loadedFile && (
           <span className="file-label" title={loadedFile}>
             {loadedFile.split(/[\\/]/).pop()}
+            {isLoadingVideo ? ' (loading…)' : ''}
           </span>
         )}
         {!isHost && hostVideoPath && !loadedFile && (
@@ -125,6 +130,7 @@ export default function RoomControls({
           <span className="badge">{isHost ? 'Host' : 'Guest'}</span>
         )}
       </div>
+      {videoError && <div className="video-status-error">{videoError}</div>}
     </section>
   );
 }
