@@ -10,6 +10,8 @@ let MpvPlayer;
 let createSurface;
 /** @type {((x: number, y: number, w: number, h: number) => void) | undefined} */
 let moveSurface;
+/** @type {(() => void) | undefined} */
+let raiseSurface;
 /** @type {((visible?: boolean) => void) | undefined} */
 let showSurface;
 /** @type {(() => void) | undefined} */
@@ -26,6 +28,7 @@ try {
     ({
       createSurface,
       moveSurface,
+      raiseSurface,
       showSurface,
       destroySurface,
       getSurfaceHwnd,
@@ -89,6 +92,13 @@ function handleMessage(msg) {
           throw new Error('moveSurface is only available on Windows');
         }
         moveSurface(args[0], args[1], args[2], args[3]);
+        result = true;
+        break;
+      case 'raiseSurface':
+        if (!raiseSurface) {
+          throw new Error('raiseSurface is only available on Windows');
+        }
+        raiseSurface();
         result = true;
         break;
       case 'showSurface':

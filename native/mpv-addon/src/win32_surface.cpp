@@ -87,10 +87,11 @@ Napi::Value Win32CreateSurface(const Napi::CallbackInfo& info) {
   }
 
   if (g_parent_hwnd) {
-    // Sit behind Chromium so HTML controls/chat stay on top; only covers the video panel rect.
+    // Child of the Electron HWND: HWND_TOP stacks above Chromium in the video panel only
+    // (not HWND_TOPMOST — that escaped onto other apps).
     SetWindowPos(
         g_surface_hwnd,
-        HWND_BOTTOM,
+        HWND_TOP,
         0,
         0,
         0,
@@ -120,11 +121,27 @@ Napi::Value Win32MoveSurface(const Napi::CallbackInfo& info) {
   if (w < 1) w = 1;
   if (h < 1) h = 1;
 
-  const HWND insertAfter = g_parent_hwnd ? HWND_BOTTOM : HWND_TOPMOST;
+  const HWND insertAfter = g_parent_hwnd ? HWND_TOP : HWND_TOPMOST;
   const UINT flags = SWP_NOACTIVATE | SWP_SHOWWINDOW;
 
   SetWindowPos(g_surface_hwnd, insertAfter, x, y, w, h, flags);
 
+  return env.Undefined();
+}
+
+Napi::Value Win32RaiseSurface(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (!g_surface_hwnd) return env.Undefined();
+
+  const HWND insertAfter = g_parent_hwnd ? HWND_TOP : HWND_TOPMOST;
+  SetWindowPos(
+      g_surface_hwnd,
+      insertAfter,
+      0,
+      0,
+      0,
+      0,
+      SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
   return env.Undefined();
 }
 
@@ -166,6 +183,7 @@ Napi::Value Win32PumpMessages(const Napi::CallbackInfo& info) {
 void RegisterWin32Surface(Napi::Env env, Napi::Object exports) {
   exports.Set("createSurface", Napi::Function::New(env, Win32CreateSurface));
   exports.Set("moveSurface", Napi::Function::New(env, Win32MoveSurface));
+  exports.Set("raiseSurface", Napi::Function::New(env, Win32RaiseSurface));
   exports.Set("showSurface", Napi::Function::New(env, Win32ShowSurface));
   exports.Set("destroySurface", Napi::Function::New(env, Win32DestroySurface));
   exports.Set("getSurfaceHwnd", Napi::Function::New(env, Win32GetSurfaceHwnd));

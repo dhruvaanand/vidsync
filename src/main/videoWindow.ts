@@ -61,10 +61,17 @@ export function toClientBounds(bounds: VideoBounds): {
   };
 }
 
+async function liftWin32Surface() {
+  if (!mpvWorker.isAvailable()) return;
+  await syncWin32Surface();
+  await mpvWorker.request('raiseSurface');
+}
+
 function showVideoSurface() {
   if (isWin32()) {
     if (mpvWorker.isAvailable()) {
       void mpvWorker.request('showSurface', true);
+      void liftWin32Surface();
     }
     return;
   }
@@ -232,7 +239,7 @@ function syncVideoWindowBounds() {
 export function bindVideoWindowSync(mainWin: BrowserWindow) {
   const sync = () => {
     if (isWin32()) {
-      void syncWin32Surface();
+      void liftWin32Surface();
       return;
     }
     syncVideoWindowBounds();
@@ -242,6 +249,7 @@ export function bindVideoWindowSync(mainWin: BrowserWindow) {
   mainWin.on('resize', sync);
   mainWin.on('maximize', sync);
   mainWin.on('unmaximize', sync);
+  mainWin.on('focus', sync);
 
   mainWin.on('minimize', () => {
     if (isWin32()) {

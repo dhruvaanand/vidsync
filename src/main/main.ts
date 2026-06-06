@@ -255,6 +255,13 @@ ipcMain.handle('mpv:load', async (_event, filePath: string) => {
   }
 
   await refreshMpvWid();
+  if (process.platform === 'win32' && mpvWid > 0) {
+    try {
+      await mpvWorker.request('raiseSurface');
+    } catch {
+      // Worker may be shutting down.
+    }
+  }
   if (process.env.NODE_ENV === 'development') {
     setTimeout(() => {
       void logMpvDiagnostics('after load');

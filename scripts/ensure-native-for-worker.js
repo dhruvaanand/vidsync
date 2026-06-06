@@ -12,8 +12,8 @@ const addonPath = path.join(releaseDir, 'mpv_addon.node');
 
 function rebuildNative(reason) {
   console.log(`[ensure-native] ${reason}`);
-  console.log('[ensure-native] Running npm run rebuild:native ...');
-  execSync('npm run rebuild:native', {
+  console.log('[ensure-native] Running npm run rebuild:native:clean ...');
+  execSync('npm run rebuild:native:clean', {
     cwd: path.join(__dirname, '..'),
     stdio: 'inherit',
   });

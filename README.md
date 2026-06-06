@@ -168,6 +168,7 @@ Connect both clients to `http://localhost:3056`, join the same room. The guest m
 | App opens but no video | Copy `libmpv-2.dll` into `native/mpv-addon/build/Release/` |
 | `The specified module could not be found` loading `mpv_addon.node` | Run `npm run build:native` again — it copies `libmpv-2.dll` **and** ffmpeg deps via MSYS2 `ldd`. Need MSYS2 mpv: `pacman -S mingw-w64-ucrt-x86_64-mpv`. Test: `npm run test:mpv` |
 | `Module did not self-register` in `[mpv-worker]` | Electron rebuilt the addon for its own Node ABI. Run `npm run rebuild:native` (system Node). `npm start` now auto-fixes this; do **not** run `@electron/rebuild` on `mpv-addon` |
+| `EPERM` / `unlink avcodec-*.dll` during rebuild | Vidsync or MPV worker still running and locking DLLs. Run `npm run kill:vidsync` then `npm run rebuild:native` (or `rebuild:native:clean` for a full wipe) |
 | MPV worker failed to start | Run `where node` — if missing, install Node or set `VIDSYNC_NODE_PATH` |
 
 ```powershell
@@ -353,7 +354,9 @@ vidsync/
 | `npm run start:client` | Launch a second client window |
 | `npm run server` | Start sync server in dev mode |
 | `npm run build:native` | Build libmpv native addon |
-| `npm run rebuild:native` | Rebuild addon without reinstalling deps |
+| `npm run rebuild:native` | Recompile addon (keeps DLLs; use while iterating) |
+| `npm run rebuild:native:clean` | Full clean rebuild — run `kill:vidsync` first if EPERM |
+| `npm run kill:vidsync` | Close app + worker so Release DLLs can be replaced |
 | `npm run package` | Unpacked app in `out/` (no installer) |
 | `npm run make` | Installer + zip (after `npm run setup`) |
 
