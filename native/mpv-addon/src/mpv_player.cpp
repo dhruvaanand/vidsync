@@ -39,6 +39,7 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
                         InstanceMethod("addSubtitle", &MpvPlayer::AddSubtitle),
                         InstanceMethod("poll", &MpvPlayer::Poll),
                         InstanceMethod("tick", &MpvPlayer::Tick),
+                        InstanceMethod("setWid", &MpvPlayer::SetWid),
                         InstanceMethod("destroy", &MpvPlayer::DestroyPlayer),
                     });
 
@@ -73,6 +74,8 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
       mpv_set_option_string(mpv_, "hwdec", "auto-safe");
 #if defined(_WIN32)
       mpv_set_option_string(mpv_, "gpu-context", "win");
+      mpv_set_option_string(mpv_, "gpu-api", "d3d11");
+      mpv_set_option_string(mpv_, "force-window", "yes");
 #endif
     } else {
       mpv_set_option_string(mpv_, "vo", "libmpv");
@@ -515,6 +518,17 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
     }
 
     return result;
+  }
+
+  Napi::Value SetWid(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (!mpv_ || info.Length() < 1 || !info[0].IsNumber()) {
+      return env.Undefined();
+    }
+
+    int64_t wid = static_cast<int64_t>(info[0].As<Napi::Number>().Int64Value());
+    mpv_set_property(mpv_, "wid", MPV_FORMAT_INT64, &wid);
+    return env.Undefined();
   }
 
   Napi::Value DestroyPlayer(const Napi::CallbackInfo& info) {

@@ -24,8 +24,12 @@ function ensureVideoWindow(parent: BrowserWindow): BrowserWindow {
     return videoWindow;
   }
 
+  const isWin32 = process.platform === 'win32';
+
+  // On Windows, a parented child HWND renders *behind* Chromium. Use a
+  // borderless always-on-top overlay aligned to the video panel instead.
   videoWindow = new BrowserWindow({
-    parent,
+    ...(isWin32 ? {} : { parent }),
     modal: false,
     show: false,
     frame: false,
@@ -40,6 +44,7 @@ function ensureVideoWindow(parent: BrowserWindow): BrowserWindow {
     minimizable: false,
     maximizable: false,
     fullscreenable: false,
+    alwaysOnTop: isWin32,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -51,6 +56,8 @@ function ensureVideoWindow(parent: BrowserWindow): BrowserWindow {
   videoWindow.setIgnoreMouseEvents(true, { forward: true });
 
   if (process.platform === 'linux') {
+    videoWindow.setAlwaysOnTop(true, 'screen-saver');
+  } else if (isWin32) {
     videoWindow.setAlwaysOnTop(true, 'screen-saver');
   }
 
@@ -139,6 +146,23 @@ export function bindVideoWindowSync(mainWin: BrowserWindow) {
       videoWindow.showInactive();
     }
   });
+
+  if (process.platform === 'win32') {
+    const liftOverlay = () => {
+      if (videoWindow && !videoWindow.isDestroyed()) {
+        videoWindow.setAlwaysOnTop(true, 'screen-saver');
+      }
+    };
+    const dropOverlay = () => {
+      if (videoWindow && !videoWindow.isDestroyed()) {
+        videoWindow.setAlwaysOnTop(false);
+      }
+    };
+
+    mainWin.on('focus', liftOverlay);
+    mainWin.on('blur', dropOverlay);
+    liftOverlay();
+  }
 }
 
 export function destroyVideoWindow() {

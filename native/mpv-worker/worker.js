@@ -37,6 +37,10 @@ function handleMessage(msg) {
         ensurePlayer(args[0] ?? 0);
         result = true;
         break;
+      case 'setWid':
+        ensurePlayer().setWid(args[0] ?? 0);
+        result = true;
+        break;
       case 'load':
         result = ensurePlayer().load(args[0]);
         break;

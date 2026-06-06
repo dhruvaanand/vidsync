@@ -57,6 +57,11 @@ async function ensureMpvForBounds(bounds: VideoBounds): Promise<boolean> {
   mpvWid = await attachVideoHost(mainWindow, bounds);
 
   if (mpvWorker.isAvailable()) {
+    try {
+      await mpvWorker.request('setWid', mpvWid);
+    } catch {
+      // Worker may be shutting down.
+    }
     return true;
   }
 
