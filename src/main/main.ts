@@ -11,6 +11,7 @@ import {
   attachVideoHost,
   bindVideoWindowSync,
   destroyVideoWindow,
+  getLastVideoBounds,
   getVideoWindowId,
   updateVideoBounds,
   type VideoBounds,
@@ -61,6 +62,30 @@ async function refreshMpvWid(): Promise<void> {
   } catch {
     // Worker may be shutting down.
   }
+}
+
+async function logMpvDiagnostics(context: string): Promise<void> {
+  if (mpvUnavailable()) return;
+
+  try {
+    const diag = (await mpvWorker.request('getDiagnostics')) as Record<string, unknown>;
+    const electronHwnd = getVideoWindowId();
+    console.log(`[mpv-diag] ${context}`, {
+      electronHwnd,
+      ...diag,
+    });
+  } catch (error) {
+    console.warn(`[mpv-diag] ${context} failed:`, error);
+  }
+}
+
+async function restartMpvEmbed(bounds: VideoBounds): Promise<boolean> {
+  if (!mainWindow || mainWindow.isDestroyed()) return false;
+
+  mpvWorker.stop();
+  destroyVideoWindow();
+  mpvWid = await attachVideoHost(mainWindow, bounds);
+  return mpvWorker.start(mpvWid);
 }
 
 async function ensureMpvForBounds(bounds: VideoBounds): Promise<boolean> {
@@ -184,15 +209,37 @@ ipcMain.handle(
 ipcMain.handle('mpv:loadError', () => mpvWorker.getLoadError());
 
 ipcMain.handle('mpv:load', async (_event, filePath: string) => {
-  if (mpvUnavailable()) {
+  const bounds = getLastVideoBounds();
+  if (process.platform === 'win32' && bounds) {
+    const restarted = await restartMpvEmbed(bounds);
+    if (!restarted) {
+      throw new Error(mpvWorker.getLoadError() ?? 'Failed to restart MPV embed');
+    }
+  } else if (mpvUnavailable()) {
     throw new Error(mpvWorker.getLoadError() ?? 'MPV is not available');
   }
+
   const ok = await mpvWorker.request('load', filePath);
   if (!ok) {
     throw new Error('MPV rejected the load command');
   }
+
   await refreshMpvWid();
+  if (process.env.NODE_ENV === 'development') {
+    setTimeout(() => {
+      void logMpvDiagnostics('after load');
+    }, 1500);
+  }
   return ok;
+});
+
+ipcMain.handle('mpv:diagnostics', async () => {
+  if (mpvUnavailable()) return null;
+  const diag = await mpvWorker.request('getDiagnostics');
+  return {
+    electronHwnd: getVideoWindowId(),
+    ...(diag as Record<string, unknown>),
+  };
 });
 
 ipcMain.handle('mpv:waitForLoad', async (_event, timeoutMs = 30000) => {

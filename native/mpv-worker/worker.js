@@ -41,6 +41,17 @@ function handleMessage(msg) {
         ensurePlayer().setWid(args[0] ?? 0);
         result = true;
         break;
+      case 'reset':
+        if (player) {
+          player.destroy();
+          player = null;
+        }
+        ensurePlayer(args[0] ?? 0);
+        result = true;
+        break;
+      case 'getDiagnostics':
+        result = ensurePlayer().getDiagnostics();
+        break;
       case 'load':
         result = ensurePlayer().load(args[0]);
         break;

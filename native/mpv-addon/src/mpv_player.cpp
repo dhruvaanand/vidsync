@@ -40,6 +40,7 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
                         InstanceMethod("poll", &MpvPlayer::Poll),
                         InstanceMethod("tick", &MpvPlayer::Tick),
                         InstanceMethod("setWid", &MpvPlayer::SetWid),
+                        InstanceMethod("getDiagnostics", &MpvPlayer::GetDiagnostics),
                         InstanceMethod("destroy", &MpvPlayer::DestroyPlayer),
                     });
 
@@ -111,6 +112,10 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
 
     mpv_set_wakeup_callback(mpv_, &MpvPlayer::OnMpvEvents, this);
     mpv_request_log_messages(mpv_, "warn");
+
+    if (embed_mode_ && wid > 0) {
+      last_wid_ = wid;
+    }
   }
 
   ~MpvPlayer() { Cleanup(); }
@@ -519,6 +524,17 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
     return result;
   }
 
+  void ReinitEmbeddedVo(int64_t wid) {
+    if (!mpv_ || !embed_mode_ || wid <= 0) return;
+    if (wid == last_wid_) return;
+
+    mpv_set_property_string(mpv_, "vo", "null");
+    mpv_set_property(mpv_, "wid", MPV_FORMAT_INT64, &wid);
+    mpv_set_property_string(mpv_, "vo", "gpu");
+    last_wid_ = wid;
+    ProcessEvents();
+  }
+
   Napi::Value SetWid(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     if (!mpv_ || info.Length() < 1 || !info[0].IsNumber()) {
@@ -526,8 +542,66 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
     }
 
     int64_t wid = static_cast<int64_t>(info[0].As<Napi::Number>().Int64Value());
-    mpv_set_property(mpv_, "wid", MPV_FORMAT_INT64, &wid);
+    if (embed_mode_) {
+      ReinitEmbeddedVo(wid);
+    } else {
+      mpv_set_property(mpv_, "wid", MPV_FORMAT_INT64, &wid);
+      last_wid_ = wid;
+    }
     return env.Undefined();
+  }
+
+  Napi::Value GetDiagnostics(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    Napi::Object result = Napi::Object::New(env);
+    if (!mpv_) return result;
+
+    ProcessEvents();
+
+    result.Set("embedMode", Napi::Boolean::New(env, embed_mode_));
+    result.Set("initWid", Napi::Number::New(env, static_cast<double>(last_wid_)));
+
+    int64_t wid = 0;
+    if (mpv_get_property(mpv_, "wid", MPV_FORMAT_INT64, &wid) >= 0) {
+      result.Set("wid", Napi::Number::New(env, static_cast<double>(wid)));
+    }
+
+    auto setString = [&](const char* key, const char* prop) {
+      char* value = mpv_get_property_string(mpv_, prop);
+      if (value) {
+        result.Set(key, Napi::String::New(env, value));
+        mpv_free(value);
+      }
+    };
+
+    auto setDouble = [&](const char* key, const char* prop) {
+      double value = 0.0;
+      if (mpv_get_property(mpv_, prop, MPV_FORMAT_DOUBLE, &value) >= 0) {
+        result.Set(key, Napi::Number::New(env, value));
+      }
+    };
+
+    setString("vo", "current-vo");
+    if (!result.Has("vo")) setString("vo", "vo");
+    setString("hwdecCurrent", "hwdec-current");
+    setString("videoFormat", "video-format");
+    setDouble("dwidth", "dwidth");
+    setDouble("dheight", "dheight");
+    setDouble("width", "width");
+    setDouble("height", "height");
+    setDouble("timePos", "time-pos");
+    setDouble("duration", "duration");
+
+    int paused = 0;
+    if (mpv_get_property(mpv_, "pause", MPV_FORMAT_FLAG, &paused) >= 0) {
+      result.Set("paused", Napi::Boolean::New(env, paused != 0));
+    }
+
+    if (!last_error_.empty()) {
+      result.Set("lastError", Napi::String::New(env, last_error_));
+    }
+
+    return result;
   }
 
   Napi::Value DestroyPlayer(const Napi::CallbackInfo& info) {
@@ -542,6 +616,7 @@ class MpvPlayer : public Napi::ObjectWrap<MpvPlayer> {
   std::atomic<bool> event_pending_{false};
   std::atomic<bool> render_pending_{false};
   bool embed_mode_ = false;
+  int64_t last_wid_ = 0;
   std::string last_error_;
 };
 

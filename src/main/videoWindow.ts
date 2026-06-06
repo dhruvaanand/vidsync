@@ -67,11 +67,16 @@ function ensureVideoWindow(parent: BrowserWindow): BrowserWindow {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      sandbox: true,
+      sandbox: false,
     },
   });
 
-  void videoWindow.loadURL('about:blank');
+  // Loading a Chromium page in the overlay window can prevent mpv gpu vo from
+  // painting to the native HWND on Windows. Keep the surface native-only.
+  if (!isWin32()) {
+    void videoWindow.loadURL('about:blank');
+  }
+
   videoWindow.setIgnoreMouseEvents(true, { forward: true });
 
   if (process.platform === 'linux') {
@@ -191,4 +196,8 @@ export function destroyVideoWindow() {
   videoWindow = null;
   parentWindow = null;
   lastBounds = null;
+}
+
+export function getLastVideoBounds(): VideoBounds | null {
+  return lastBounds;
 }
