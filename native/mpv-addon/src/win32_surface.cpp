@@ -2,7 +2,9 @@
 
 #include <napi.h>
 
-#include <algorithm>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 
 namespace {
@@ -39,8 +41,10 @@ Napi::Value Win32CreateSurface(const Napi::CallbackInfo& info) {
 
   const int x = info[0].As<Napi::Number>().Int32Value();
   const int y = info[1].As<Napi::Number>().Int32Value();
-  const int w = std::max(1, info[2].As<Napi::Number>().Int32Value());
-  const int h = std::max(1, info[3].As<Napi::Number>().Int32Value());
+  int w = info[2].As<Napi::Number>().Int32Value();
+  int h = info[3].As<Napi::Number>().Int32Value();
+  if (w < 1) w = 1;
+  if (h < 1) h = 1;
 
   EnsureClassRegistered();
 
@@ -84,8 +88,10 @@ Napi::Value Win32MoveSurface(const Napi::CallbackInfo& info) {
 
   const int x = info[0].As<Napi::Number>().Int32Value();
   const int y = info[1].As<Napi::Number>().Int32Value();
-  const int w = std::max(1, info[2].As<Napi::Number>().Int32Value());
-  const int h = std::max(1, info[3].As<Napi::Number>().Int32Value());
+  int w = info[2].As<Napi::Number>().Int32Value();
+  int h = info[3].As<Napi::Number>().Int32Value();
+  if (w < 1) w = 1;
+  if (h < 1) h = 1;
 
   SetWindowPos(
       g_surface_hwnd,
